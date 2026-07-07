@@ -145,20 +145,20 @@ Python увидит обычный список чисел:
  
 Бэкендер будет вызывать её вот так:
 
-import torchimport pandas as pd
-
-def analyze_ecg_with_ai(clean_df):
+    import torchimport pandas as pd
+    
+    def analyze_ecg_with_ai(clean_df):
     """Функция принимает DataFrame от C++, прогоняет его через ИИ
-
+    
     и возвращает DataFrame с разметкой аритмий.
     """
     # 1. Загрузка весов модели
     # model = MyCNN()
     # model.load_state_dict(torch.load('heart_model.pth'))
-
+    
     # 2. ИИ: нарезка сигнала clean_df на кусочки,
     # подача в модель, получение предсказаний (0 или 1)
-
+    
     # 3. Запись результатов в новую колонку
     # Для теста пока делаем заглушку (якобы нашли аритмию на 500-й точке)
     clean_df["ai_prediction"] = 0
