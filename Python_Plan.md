@@ -973,7 +973,7 @@ pip install customtkinter matplotlib pandas numpy.
         app = CrossValidationApp()
         app.mainloop()
 
-##### 📑 Шаг 8. Автоматическое генерация медицинского заключения (отчета)
+##### 📋 Шаг 8. Автоматическое генерация медицинского заключения (отчета)
 
 Она полностью закрывает концепцию «избавления врача от рутины»: ИИ не просто нашел аномалии и сопоставил их с дневником, он сам сформулировал медицинский текст. Врачу остается только нажать кнопку «Печать».
 Для генерации красивых печатных PDF-отчетов в Python используется библиотека reportlab.
@@ -1363,3 +1363,170 @@ pip install reportlab
         panel.pack(padx=20, pady=20, fill="both", expand=True)
        
         app.mainloop()
+
+##### 🔝 Шаг 10. Многопоточность. Всплывающие подсказки. Объединение в единую дизайн-систему.
+ ЗАДАЧА:
+* Сделать анимацию загрузки (лоадер) для С++ модуля очистки данных
+* Добавить всплывающие подсказки (Tooltips) для медицинских терминов ИИ
+* Показать, как собрать интерфейс в единую дизайн-систему (цветовые константы)
+
+Какую пользу этот финальный шаг приносит стартапу:
+
+   1. Техническая зрелость (Архитектура многопоточности): Потоки (threading) — важнейший аспект. Если запустить тяжелый C++ код напрямую по кнопке, десктопное окно мгновенно «замрет» (на нем появится надпись «Программа не отвечает»). Использование фонового потока - это профессиональное решение, которое использует промышленный софт.
+   2. Дизайн-система (Масштабируемость): Вынесение всех цветов в класс DesignSystem гарантирует, что если завтра менторы акселератора скажут: «Сделайте ребрендинг и измените красный цвет на фиолетовый», вам не придется переписывать 1000 строк кода. Вы поменяете один HEX-код в константах, и всё приложение мгновенно перекрасится.
+   3. Идеальный UX подсказок (Tooltips): Врачу не нужно гадать, за что отвечает то или иное поле. При наведении мыши всплывают аккуратные, темные, современные плашки, объясняющие внутреннюю логику ИИ.
+ 
+
+
+Закроем все три задачи, чтобы превратить интерфейс стартапа в полноценный, законченный продукт промышленного уровня. Мы объединим анимацию загрузки (лоадер) для C++ движка, интерактивные всплывающие подсказки (Tooltips) для врача и вынесем всё это в единую дизайн-систему (цветовые константы).
+Для работы кода нам понадобится одна небольшая внешняя библиотека для создания красивых всплывающих подсказок:
+      
+      pip install CTkTooltip
+      
+      ## Полный код десктопного приложения с лоадером, подсказками и дизайн-системой
+      Ниже представлена монолитная реализация, которую можно запускать. Она имитирует долгий процесс очистки данных на C++ и показывает врачу стильный индикатор прогресса, не замораживая при этом само окно программы.
+      
+      import customtkinter as ctkimport timeimport threadingfrom CTkTooltip import * # Библиотека для современных всплывающих подсказок
+      # =====================================================================# 1. ЕДИНАЯ ДИЗАЙН-СИСТЕМА (ЦВЕТОВЫЕ КОНСТАНТЫ ТАЙЛВИНД CSS)# =====================================================================class DesignSystem:
+          # Фоновые цвета (Slate палитра)
+          BG_MAIN = "#0F172A"       # Самый глубокий темный фон приложения
+          BG_PANEL = "#1E293B"      # Фон внутренних карточек и панелей
+          BG_INPUT = "#0F172A"      # Фон внутри полей ввода
+         
+          # Линейные и контурные цвета
+          BORDER_NEUTRAL = "#334155" # Серый контур элементов в покое
+         
+          # Сигнальные цвета (Светофорная логика)
+          COLOR_PRIMARY = "#3B82F6"  # Информационный ярко-синий
+          COLOR_HOVER_PRIMARY = "#1D4ED8"
+         
+          COLOR_SUCCESS = "#10B981"  # ИИ-Норма (Изумрудно-зеленый)
+          COLOR_HOVER_SUCCESS = "#059669"
+         
+          COLOR_DANGER = "#EF4444"   # ИИ-Патология (Неоново-красный)
+          COLOR_HOVER_DANGER = "#DC2626"
+         
+          # Текстовые цвета
+          TEXT_MAIN = "#F8FAFC"      # Основной белый текст
+          TEXT_MUTED = "#94A3B8"     # Приглушенный серый текст для подписей
+         
+          # Типографика
+          FONT_FAMILY = "Segoe UI"
+      
+      # =====================================================================# 2. ГЛАВНОЕ ПРИЛОЖЕНИЕ# =====================================================================class MedOSApp(ctk.CTk):
+          def __init__(self):
+              super().__init__()
+      
+              self.title("🤖 Holter AI — Промышленный прототип")
+              self.geometry("600x500")
+              self.configure(fg_color=DesignSystem.BG_MAIN)
+             
+              # Заголовок экрана
+              self.lbl_header = ctk.CTkLabel(
+                  self,
+                  text="🫀 Модуль обработки сигналов Холтера",
+                  font=(DesignSystem.FONT_FAMILY, 18, "bold"),
+                  text_color=DesignSystem.TEXT_MAIN
+              )
+              self.lbl_header.pack(pady=(30, 10), padx=20, anchor="w")
+      
+              # Основная рабочая панель
+              self.panel = ctk.CTkFrame(self, fg_color=DesignSystem.BG_PANEL, corner_radius=12)
+              self.panel.pack(fill="both", expand=True, padx=20, pady=10)
+      
+              # Интерактивное поле ввода ID пациента с фокус-эффектом
+              self.entry_id = ctk.CTkEntry(
+                  self.panel,
+                  placeholder_text="🆔 Введите обезличенный ID пациента...",
+                  font=(DesignSystem.FONT_FAMILY, 13),
+                  height=40,
+                  corner_radius=8,
+                  fg_color=DesignSystem.BG_INPUT,
+                  border_color=DesignSystem.BORDER_NEUTRAL,
+                  text_color=DesignSystem.TEXT_MAIN,
+                  placeholder_text_color=DesignSystem.TEXT_MUTED
+              )
+              self.entry_id.pack(pady=(30, 15), padx=20, fill="x")
+             
+              # --- ВСПЛЫВАЮЩАЯ ПОДСКАЗКА ДЛЯ ПОЛЯ ВВОДА ---
+              CTkTooltip(self.entry_id, message="Введите хэш-код из МИС для соблюдения ФЗ-152 о персональных данных", delay=0.3)
+      
+              # Кнопка запуска тяжелых С++ вычислений
+              self.btn_run = ctk.CTkButton(
+                  self.panel,
+                  text="🚀 Запустить очистку сигнала (C++) и ИИ-анализ",
+                  font=(DesignSystem.FONT_FAMILY, 13, "bold"),
+                  height=45,
+                  corner_radius=8,
+                  fg_color=DesignSystem.COLOR_PRIMARY,
+                  hover_color=DesignSystem.COLOR_HOVER_PRIMARY,
+                  text_color=DesignSystem.TEXT_MAIN,
+                  command=self.start_processing_thread
+              )
+              self.btn_run.pack(pady=10, padx=20, fill="x")
+             
+              # --- ВСПЛЫВАЮЩАЯ ПОДСКАЗКА ДЛЯ КНОПКИ ---
+              CTkTooltip(self.btn_run, message="Клик запустит внешнюю C++ библиотеку фильтрации Пэна-Томпкинса", delay=0.3)
+      
+              # =====================================================================
+              # 3. ЭЛЕМЕНТЫ ЛОАДЕРА (СКРЫТЫ ПО УМОЛЧАНИЮ)
+              # =====================================================================
+              self.lbl_status = ctk.CTkLabel(
+                  self.panel,
+                  text="Ожидание запуска...",
+                  font=(DesignSystem.FONT_FAMILY, 12, "italic"),
+                  text_color=DesignSystem.TEXT_MUTED
+              )
+              self.lbl_status.pack(pady=(20, 5))
+      
+              self.progress_bar = ctk.CTkProgressBar(
+                  self.panel,
+                  width=400,
+                  height=8,
+                  corner_radius=4,
+                  progress_color=DesignSystem.COLOR_SUCCESS,
+                  fg_color=DesignSystem.BG_MAIN
+              )
+              self.progress_bar.pack(pady=5)
+              self.progress_bar.set(0) # Изначально прогресс равен нулю
+      
+          # =====================================================================
+          # 4. МНОГОПОТОЧНАЯ ЛОГИКА ЛОАДЕРА (ЧТОБЫ ИНТЕРФЕЙС НЕ ЗАВИСАЛ)
+          # =====================================================================
+          def start_processing_thread(self):
+              """Запуск тяжелой задачи в отдельном потоке"""
+              if not self.entry_id.get():
+                  self.lbl_status.configure(text="❌ Ошибка: Сначала укажите ID пациента!", text_color=DesignSystem.COLOR_DANGER)
+                  return
+                 
+              # Блокируем кнопку на время расчета, чтобы избежать повторных кликов
+              self.btn_run.configure(state="disabled")
+             
+              # Создаем и запускаем фоновый поток вычислений
+              threading.Thread(target=self.simulate_cpp_and_ai_work, daemon=True).start()
+      
+          def simulate_cpp_and_ai_work(self):
+              """Имитация работы C++ движка фильтрации и инференса нейросети"""
+              steps = [
+                  (0.2, "⚙️ Загрузка бинарного EDF-файла..."),
+                  (0.5, "🧬 C++: Применение полосового фильтра Пэна-Томпкинса..."),
+                  (0.8, "🧠 ИИ: Нарезка QRS-комплексов и классификация аритмий..."),
+                  (1.0, "✅ Готово! Результаты кросс-валидации выгружены.")
+              ]
+             
+              for progress, text in steps:
+                  time.sleep(1.2) # Имитируем реальное время выполнения тяжелого кода
+                 
+                  # Важно: обновление графических элементов делаем через метод .after()
+                  # или напрямую, так как CustomTkinter потокобезопасен для базовых свойств
+                  self.progress_bar.set(progress)
+                  self.lbl_status.configure(text=text, text_color=DesignSystem.TEXT_MAIN)
+                 
+              # Возвращаем кнопку в активное состояние по окончании
+              self.btn_run.configure(state="normal")
+              self.lbl_status.configure(text_color=DesignSystem.COLOR_SUCCESS)
+      
+      if __name__ == "__main__":
+          app = MedOSApp()
+          app.mainloop()
+              
