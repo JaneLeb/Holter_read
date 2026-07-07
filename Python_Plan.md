@@ -933,146 +933,146 @@ pip install reportlab
 ##### Шаг 2: Код модуля автогенерации отчета
 Этот скрипт берет данные кросс-валидации (из C++ и дневника), сам формирует клинический текст по правилам кардиологии и собирает стильный печатный PDF-документ.
 
-import osfrom reportlab.lib.pagesizes import letterfrom reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStylefrom reportlab.lib.styles import getSampleStyleSheet, ParagraphStylefrom reportlab.lib import colorsfrom reportlab.pdfbase import pdfmetricsfrom reportlab.pdfbase.ttfonts import TTFont
-def generate_auto_report(patient_id, events, output_filename="holter_report.pdf"):
-    # 1. ПОДДЕРЖКА КИРИЛЛИЦЫ (Важно: скачайте стандартный шрифт DejaVu или Arial)
-    # Для демонстрации используем системный шрифт Windows или скачанный .ttf
-    try:
-        pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
-        font_name = 'DejaVuSans'
-    except:
-        # Если шрифта нет под рукой, ReportLab создаст файл, но кириллица в базовых шрифтах не поддерживается.
-        # В реальном проекте обязательно положите файл DejaVuSans.ttf в папку с кодом!
-        font_name = 'Helvetica'
-
-    doc = SimpleDocTemplate(output_filename, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
-    story = []
-   
-    # 2. НАСТРОЙКА СТИЛЕЙ
-    styles = getSampleStyleSheet()
-   
-    title_style = ParagraphStyle(
-        'DocTitle',
-        fontName=font_name,
-        fontSize=20,
-        leading=24,
-        textColor=colors.HexColor('#1E293B'),
-        spaceAfter=15,
-        alignment=1 # По центру
-    )
-   
-    h2_style = ParagraphStyle(
-        'SectionHeader',
-        fontName=font_name,
-        fontSize=14,
-        leading=18,
-        textColor=colors.HexColor('#3B82F6'),
-        spaceBefore=12,
-        spaceAfter=6,
-        keepWithNext=True
-    )
-   
-    body_style = ParagraphStyle(
-        'BodyTextCustom',
-        fontName=font_name,
-        fontSize=10,
-        leading=14,
-        textColor=colors.HexColor('#334155'),
-        spaceAfter=6
-    )
-
-    # 3. ШАПКА ДОКУМЕНТА
-    story.append(Paragraph("<b>МЕДИЦИНСКОЕ ЗАКЛЮЧЕНИЕ ХОЛТЕР-ИИ</b>", title_style))
-    story.append(Paragraph(f"<b>Идентификатор пациента (МИС):</b> {patient_id}", body_style))
-    story.append(Paragraph(f"<b>Дата анализа:</b> 07.07.2026", body_style))
-    story.append(Spacer(1, 15))
-   
-    # 4. АВТОМАТИЧЕСКИЙ СИНТЕТИЧЕСКИЙ ТЕКСТ (ИИ-ГЕНЕРАЦИЯ)
-    story.append(Paragraph("Динамический анализ данных (Синтез ИИ)", h2_style))
-   
-    # Логика генератора текста на основе данных
-    total_events = len(events)
-    danger_events = [e for e in events if e["is_danger"]]
-   
-    auto_text = f"За период мониторинга система Holter AI обработала суточную запись ЭКГ. " \                f"Было зафиксировано {total_events} значимых триггеров из электронного дневника самочувствия. "
-   
-    if len(danger_events) > 0:
-        auto_text += f"Выявлено <b>{len(danger_events)} несоответствий ритма</b> профилю активности пациента. " \                     f"Основное внимание обращено на эпизоды в состоянии физического покоя, где нейросеть " \                     f"верифицировала признаки патологической активности миокарда. "
-    else:
-        auto_text += "Критических отклонений ритма, не соответствующих профилю физической нагрузки, не обнаружено. " \                     "Все зафиксированные скачки ЧСС носят адекватный физиологический характер."
-                    
-    story.append(Paragraph(auto_text, body_style))
-    story.append(Spacer(1, 15))
-   
-    # 5. ТАБЛИЦА СОПОСТАВЛЕНИЯ (КРОСС-ВАЛИДАЦИЯ)
-    story.append(Paragraph("Сводный протокол верифицированных событий", h2_style))
-   
-    # Заголовки таблицы
-    table_data = [["Время (сек)", "Контекст (Дневник)", "Симптом", "Вердикт ИИ / Статус"]]
-   
-    for ev in events:
-        status = "⚠️ КРИТИЧНО" if ev["is_danger"] else "✓ Норма"
-        table_data.append([
-            f"{ev['time_start']}-{ev['time_end']}",
-            ev["context"],
-            ev["symptom"],
-            f"{ev['ai_verdict']} ({status})"
-        ])
-   
-    # Стилизация таблицы (чистый, строгий медицинский стиль)
-    t = Table(table_data, colWidths=[80, 160, 140, 150])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F1F5F9')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor('#1E293B')),
-        ('FONTNAME', (0,0), (-1,-1), font_name),
-        ('FONTSIZE', (0,0), (-1,-1), 9),
-        ('BOTTOMPADDING', (0,0), (-1,0), 8),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        # Подсветка строк: опасные красим бледным красноватым
-        ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#FEE2E2')) if events[1]["is_danger"] else ('',),
-    ]))
-   
-    story.append(t)
-    story.append(Spacer(1, 40))
-   
-    # 6. ПОДПИСЬ ВРАЧА
-    story.append(Paragraph("Заключение сформировано автоматически системой Holter AI.", body_style))
-    story.append(Paragraph("Подпись лечащего врача: _______________________ / ___________________", body_style))
-   
-    # Сборка документа
-    doc.build(story)
-# --- ПРИМЕР ЗАПУСКА ДЛЯ ТЕСТА ---if __name__ == "__main__":
-    # Тестовый JSON-массив данных от C++ и Дневника
-    mock_events = [
-        {
-            "time_start": 2.0, "time_end": 4.0,
-            "context": "Физическая нагрузка (Бег)", "symptom": "Нехватка воздуха / Одышка",
-            "ai_verdict": "Синусовая тахикардия", "is_danger": False
-        },
-        {
-            "time_start": 7.0, "time_end": 9.0,
-            "context": "Покой (Просмотр ТВ)", "symptom": "Замирание в сердце",
-            "ai_verdict": "Желудочковая экстрасистолия", "is_danger": True
-        }
-    ]
-   
-    generate_auto_report(patient_id="Patient_99_Anonymous", events=mock_events)
-    print("PDF-отчет успешно сгенерирован!")
-
-------------------------------
-как встроить в этот PDF-отчет реальное изображение (картинку) того самого аномального участка ЭКГ графика, чтобы отчет выглядел как из настоящей клиники?Как интегрировать это в десктоп на CustomTkinter:
-В код вашего приложения (из прошлого ответа) в правую панель достаточно добавить всего одну красивую кнопку:
-
-self.btn_print = ctk.CTkButton(
-    self.right_panel,
-    text="🖨️ Сгенерировать печатный отчет (PDF)",
-    fg_color="#3B82F6",
-    hover_color="#2563EB",
-    command=lambda: generate_auto_report(self.entry_id.get(), self.events)
-)
-self.btn_print.pack(pady=10, padx=20, side="bottom")       
+      import osfrom reportlab.lib.pagesizes import letterfrom reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStylefrom reportlab.lib.styles import getSampleStyleSheet, ParagraphStylefrom reportlab.lib import colorsfrom reportlab.pdfbase import pdfmetricsfrom reportlab.pdfbase.ttfonts import TTFont
+      def generate_auto_report(patient_id, events, output_filename="holter_report.pdf"):
+          # 1. ПОДДЕРЖКА КИРИЛЛИЦЫ (Важно: скачайте стандартный шрифт DejaVu или Arial)
+          # Для демонстрации используем системный шрифт Windows или скачанный .ttf
+          try:
+              pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
+              font_name = 'DejaVuSans'
+          except:
+              # Если шрифта нет под рукой, ReportLab создаст файл, но кириллица в базовых шрифтах не поддерживается.
+              # В реальном проекте обязательно положите файл DejaVuSans.ttf в папку с кодом!
+              font_name = 'Helvetica'
+      
+          doc = SimpleDocTemplate(output_filename, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+          story = []
+         
+          # 2. НАСТРОЙКА СТИЛЕЙ
+          styles = getSampleStyleSheet()
+         
+          title_style = ParagraphStyle(
+              'DocTitle',
+              fontName=font_name,
+              fontSize=20,
+              leading=24,
+              textColor=colors.HexColor('#1E293B'),
+              spaceAfter=15,
+              alignment=1 # По центру
+          )
+         
+          h2_style = ParagraphStyle(
+              'SectionHeader',
+              fontName=font_name,
+              fontSize=14,
+              leading=18,
+              textColor=colors.HexColor('#3B82F6'),
+              spaceBefore=12,
+              spaceAfter=6,
+              keepWithNext=True
+          )
+         
+          body_style = ParagraphStyle(
+              'BodyTextCustom',
+              fontName=font_name,
+              fontSize=10,
+              leading=14,
+              textColor=colors.HexColor('#334155'),
+              spaceAfter=6
+          )
+      
+          # 3. ШАПКА ДОКУМЕНТА
+          story.append(Paragraph("<b>МЕДИЦИНСКОЕ ЗАКЛЮЧЕНИЕ ХОЛТЕР-ИИ</b>", title_style))
+          story.append(Paragraph(f"<b>Идентификатор пациента (МИС):</b> {patient_id}", body_style))
+          story.append(Paragraph(f"<b>Дата анализа:</b> 07.07.2026", body_style))
+          story.append(Spacer(1, 15))
+         
+          # 4. АВТОМАТИЧЕСКИЙ СИНТЕТИЧЕСКИЙ ТЕКСТ (ИИ-ГЕНЕРАЦИЯ)
+          story.append(Paragraph("Динамический анализ данных (Синтез ИИ)", h2_style))
+         
+          # Логика генератора текста на основе данных
+          total_events = len(events)
+          danger_events = [e for e in events if e["is_danger"]]
+         
+          auto_text = f"За период мониторинга система Holter AI обработала суточную запись ЭКГ. " \                f"Было зафиксировано {total_events} значимых триггеров из электронного дневника самочувствия. "
+         
+          if len(danger_events) > 0:
+              auto_text += f"Выявлено <b>{len(danger_events)} несоответствий ритма</b> профилю активности пациента. " \                     f"Основное внимание обращено на эпизоды в состоянии физического покоя, где нейросеть " \                     f"верифицировала признаки патологической активности миокарда. "
+          else:
+              auto_text += "Критических отклонений ритма, не соответствующих профилю физической нагрузки, не обнаружено. " \                     "Все зафиксированные скачки ЧСС носят адекватный физиологический характер."
+                          
+          story.append(Paragraph(auto_text, body_style))
+          story.append(Spacer(1, 15))
+         
+          # 5. ТАБЛИЦА СОПОСТАВЛЕНИЯ (КРОСС-ВАЛИДАЦИЯ)
+          story.append(Paragraph("Сводный протокол верифицированных событий", h2_style))
+         
+          # Заголовки таблицы
+          table_data = [["Время (сек)", "Контекст (Дневник)", "Симптом", "Вердикт ИИ / Статус"]]
+         
+          for ev in events:
+              status = "⚠️ КРИТИЧНО" if ev["is_danger"] else "✓ Норма"
+              table_data.append([
+                  f"{ev['time_start']}-{ev['time_end']}",
+                  ev["context"],
+                  ev["symptom"],
+                  f"{ev['ai_verdict']} ({status})"
+              ])
+         
+          # Стилизация таблицы (чистый, строгий медицинский стиль)
+          t = Table(table_data, colWidths=[80, 160, 140, 150])
+          t.setStyle(TableStyle([
+              ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F1F5F9')),
+              ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor('#1E293B')),
+              ('FONTNAME', (0,0), (-1,-1), font_name),
+              ('FONTSIZE', (0,0), (-1,-1), 9),
+              ('BOTTOMPADDING', (0,0), (-1,0), 8),
+              ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
+              ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+              ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+              # Подсветка строк: опасные красим бледным красноватым
+              ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#FEE2E2')) if events[1]["is_danger"] else ('',),
+          ]))
+         
+          story.append(t)
+          story.append(Spacer(1, 40))
+         
+          # 6. ПОДПИСЬ ВРАЧА
+          story.append(Paragraph("Заключение сформировано автоматически системой Holter AI.", body_style))
+          story.append(Paragraph("Подпись лечащего врача: _______________________ / ___________________", body_style))
+         
+          # Сборка документа
+          doc.build(story)
+      # --- ПРИМЕР ЗАПУСКА ДЛЯ ТЕСТА ---if __name__ == "__main__":
+          # Тестовый JSON-массив данных от C++ и Дневника
+          mock_events = [
+              {
+                  "time_start": 2.0, "time_end": 4.0,
+                  "context": "Физическая нагрузка (Бег)", "symptom": "Нехватка воздуха / Одышка",
+                  "ai_verdict": "Синусовая тахикардия", "is_danger": False
+              },
+              {
+                  "time_start": 7.0, "time_end": 9.0,
+                  "context": "Покой (Просмотр ТВ)", "symptom": "Замирание в сердце",
+                  "ai_verdict": "Желудочковая экстрасистолия", "is_danger": True
+              }
+          ]
+         
+          generate_auto_report(patient_id="Patient_99_Anonymous", events=mock_events)
+          print("PDF-отчет успешно сгенерирован!")
+      
+      ------------------------------
+      как встроить в этот PDF-отчет реальное изображение (картинку) того самого аномального участка ЭКГ графика, чтобы отчет выглядел как из настоящей клиники?Как интегрировать это в десктоп на CustomTkinter:
+      В код вашего приложения (из прошлого ответа) в правую панель достаточно добавить всего одну красивую кнопку:
+      
+      self.btn_print = ctk.CTkButton(
+          self.right_panel,
+          text="🖨️ Сгенерировать печатный отчет (PDF)",
+          fg_color="#3B82F6",
+          hover_color="#2563EB",
+          command=lambda: generate_auto_report(self.entry_id.get(), self.events)
+      )
+      self.btn_print.pack(pady=10, padx=20, side="bottom")       
 
 ##### Как встроить в этот PDF-отчет реальное изображение (картинку) того самого аномального участка ЭКГ графика, чтобы отчет выглядел как из настоящей клиники:
 
