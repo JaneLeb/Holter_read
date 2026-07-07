@@ -1231,98 +1231,98 @@ pip install reportlab
 ##### 💄 Дополнительные дизайнерские фишечки
 
 
-Для создания «дорогого» и плавного интерфейса, Hover-эффекты (изменение цвета при наведении) — это обязательный стандарт. В CustomTkinter эта логика уже встроена на глубоком уровне, вам не нужно прописывать сложные анимации вручную. Достаточно передать правильные гексадецимальные (HEX) коды цветов в параметры виджетов.
+Для создания «дорогого» и плавного интерфейса, Hover-эффекты (изменение цвета при наведении) — это обязательный стандарт. В CustomTkinter эта логика уже встроена на глубоком уровне. Не нужно прописывать сложные анимации вручную. Достаточно передать правильные гексадецимальные (HEX) коды цветов в параметры виджетов.
 Чтобы ваше приложение выглядело как премиальный MedTech-продукт, мы применим палитру Tailwind CSS Slate (её используют топовые современные ИТ-компании).
 Ниже представлен улучшенный UI-код левой панели и кнопок управления. В нем настроена правильная цветовая гамма, закругления углов, иконки-эмодзи и интерактивные Hover-эффекты для каждого элемента
 
 .
 ------------------------------
 ## Шаблон современного UX/UI элемента с Hover-эффектами
-Вы можете заменить блок кнопок и карточек в вашем основном десктопном приложении на этот код:
+Можно заменить блок кнопок и карточек в основном десктопном приложении на этот код:
 
-import customtkinter as ctk
-class ModernUIComponents(ctk.CTkFrame):
-    def __init__(self, master, **kwargs):
-        super().__init__(master, fg_color="#1E293B", corner_radius=12, **kwargs) # Темный Slate фон панели
+    import customtkinter as ctk
+    class ModernUIComponents(ctk.CTkFrame):
+        def __init__(self, master, **kwargs):
+            super().__init__(master, fg_color="#1E293B", corner_radius=12, **kwargs) # Темный Slate фон панели
+           
+            # Заголовок
+            self.title = ctk.CTkLabel(
+                self,
+                text="🛠️ Панель управления",
+                font=("Segoe UI", 16, "bold"),
+                text_color="#F8FAFC"
+            )
+            self.title.pack(pady=15, padx=15, anchor="w")
+    
+            # 1. СТИЛЬНАЯ СИНЯЯ КНОПКА (Генерация отчета / Синхронизация)
+            # При наведении цвет плавно меняется с ярко-синего на глубокий синий
+            self.btn_sync = ctk.CTkButton(
+                self,
+                text="🔄 Синхронизировать с МИС",
+                font=("Segoe UI", 13, "bold"),
+                height=40,
+                corner_radius=8,                # Модное закругление углов
+                fg_color="#3B82F6",             # Основной цвет кнопки (ярко-синий)
+                hover_color="#1D4ED8",          # Цвет при наведении (темно-синий)
+                text_color="#FFFFFF",
+                command=self.dummy_action
+            )
+            self.btn_sync.pack(pady=10, padx=15, fill="x")
+    
+            # 2. КРИТИЧЕСКАЯ КНОПКА ДЕЙСТВИЯ (Отправка патологии в карту)
+            # При наведении меняется с тревожного красного на насыщенный бордовый
+            self.btn_alert = ctk.CTkButton(
+                self,
+                text="🚨 Отправить аномалию в карту",
+                font=("Segoe UI", 13, "bold"),
+                height=40,
+                corner_radius=8,
+                fg_color="#EF4444",             # Основной цвет (неоново-красный)
+                hover_color="#B91C1C",          # Цвет при наведении (бордовый)
+                text_color="#FFFFFF",
+                command=self.dummy_action
+            )
+            self.btn_alert.pack(pady=10, padx=15, fill="x")
+    
+            # 3. НЕЙТРАЛЬНАЯ КНОПКА (Обзор / Настройки)
+            # Инверсивный эффект: серая кнопка становится светлее при наведении
+            self.btn_neutral = ctk.CTkButton(
+                self,
+                text="🔎 Переключить масштаб",
+                font=("Segoe UI", 13),
+                height=35,
+                corner_radius=8,
+                fg_color="#334155",             # Темно-серый
+                hover_color="#475569",          # Светло-серый при наведении
+                text_color="#E2E8F0",
+                command=self.dummy_action
+            )
+            self.btn_neutral.pack(pady=10, padx=15, fill="x")
+    
+            # 4. ИНТЕРАКТИВНОЕ ПОЛЕ ВВОДА (Поиск пациента)
+            # Меняет цвет рамки на синий, когда врач кликает по нему (фокус)
+            self.search_entry = ctk.CTkEntry(
+                self,
+                placeholder_text="🔍 Поиск по ID пациента...",
+                font=("Segoe UI", 12),
+                height=35,
+                corner_radius=8,
+                fg_color="#0F172A",             # Очень темный фон внутри
+                border_color="#334155",         # Серая рамка в покое
+                text_color="#F8FAFC",
+                placeholder_text_color="#64748B"
+            )
+            self.search_entry.pack(pady=15, padx=15, fill="x")
+    
+        def dummy_action(self):
+            print("Действие выполнено с Hover-эффектом!")
+    # Пример для быстрого теста панели изолированноif __name__ == "__main__":
+        app = ctk.CTk()
+        app.title("UI Kit")
+        app.geometry("400x400")
+        app.configure(fg_color="#0F172A") # Главный фон приложения
        
-        # Заголовок
-        self.title = ctk.CTkLabel(
-            self,
-            text="🛠️ Панель управления",
-            font=("Segoe UI", 16, "bold"),
-            text_color="#F8FAFC"
-        )
-        self.title.pack(pady=15, padx=15, anchor="w")
-
-        # 1. СТИЛЬНАЯ СИНЯЯ КНОПКА (Генерация отчета / Синхронизация)
-        # При наведении цвет плавно меняется с ярко-синего на глубокий синий
-        self.btn_sync = ctk.CTkButton(
-            self,
-            text="🔄 Синхронизировать с МИС",
-            font=("Segoe UI", 13, "bold"),
-            height=40,
-            corner_radius=8,                # Модное закругление углов
-            fg_color="#3B82F6",             # Основной цвет кнопки (ярко-синий)
-            hover_color="#1D4ED8",          # Цвет при наведении (темно-синий)
-            text_color="#FFFFFF",
-            command=self.dummy_action
-        )
-        self.btn_sync.pack(pady=10, padx=15, fill="x")
-
-        # 2. КРИТИЧЕСКАЯ КНОПКА ДЕЙСТВИЯ (Отправка патологии в карту)
-        # При наведении меняется с тревожного красного на насыщенный бордовый
-        self.btn_alert = ctk.CTkButton(
-            self,
-            text="🚨 Отправить аномалию в карту",
-            font=("Segoe UI", 13, "bold"),
-            height=40,
-            corner_radius=8,
-            fg_color="#EF4444",             # Основной цвет (неоново-красный)
-            hover_color="#B91C1C",          # Цвет при наведении (бордовый)
-            text_color="#FFFFFF",
-            command=self.dummy_action
-        )
-        self.btn_alert.pack(pady=10, padx=15, fill="x")
-
-        # 3. НЕЙТРАЛЬНАЯ КНОПКА (Обзор / Настройки)
-        # Инверсивный эффект: серая кнопка становится светлее при наведении
-        self.btn_neutral = ctk.CTkButton(
-            self,
-            text="🔎 Переключить масштаб",
-            font=("Segoe UI", 13),
-            height=35,
-            corner_radius=8,
-            fg_color="#334155",             # Темно-серый
-            hover_color="#475569",          # Светло-серый при наведении
-            text_color="#E2E8F0",
-            command=self.dummy_action
-        )
-        self.btn_neutral.pack(pady=10, padx=15, fill="x")
-
-        # 4. ИНТЕРАКТИВНОЕ ПОЛЕ ВВОДА (Поиск пациента)
-        # Меняет цвет рамки на синий, когда врач кликает по нему (фокус)
-        self.search_entry = ctk.CTkEntry(
-            self,
-            placeholder_text="🔍 Поиск по ID пациента...",
-            font=("Segoe UI", 12),
-            height=35,
-            corner_radius=8,
-            fg_color="#0F172A",             # Очень темный фон внутри
-            border_color="#334155",         # Серая рамка в покое
-            text_color="#F8FAFC",
-            placeholder_text_color="#64748B"
-        )
-        self.search_entry.pack(pady=15, padx=15, fill="x")
-
-    def dummy_action(self):
-        print("Действие выполнено с Hover-эффектом!")
-# Пример для быстрого теста панели изолированноif __name__ == "__main__":
-    app = ctk.CTk()
-    app.title("UI Kit")
-    app.geometry("400x400")
-    app.configure(fg_color="#0F172A") # Главный фон приложения
-   
-    panel = ModernUIComponents(app)
-    panel.pack(padx=20, pady=20, fill="both", expand=True)
-   
-    app.mainloop()
+        panel = ModernUIComponents(app)
+        panel.pack(padx=20, pady=20, fill="both", expand=True)
+       
+        app.mainloop()
