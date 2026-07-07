@@ -29,33 +29,33 @@ pip install pandas plotly
 ## Шаг 2. Создание кода интерфейса
 Создай файл app.py и скопируй туда этот простой код. Он уже умеет принимать файлы и рисовать графики!
 
-import streamlit as stimport pandas as pdimport plotly.express as px
-# 1. Настраиваем внешний вид страницы
-st.set_page_config(page_title="CardioAI Module", layout="wide")
-st.title("🫀 CardioAI: Модуль аналитики ЭКГ для B2B")
-# 2. Делаем боковую панель управления (Sidebar)
-st.sidebar.header("Управление проектом")uploaded_ecg = st.sidebar.file_uploader("Загрузить файл Холтера (RAW)", type=["txt", "csv", "edf"])uploaded_diary = st.sidebar.file_uploader("Импортировать электронный дневник", type=["csv", "json"])
-# Кнопка запуска нашего C++ ядра (пока заглушка)if st.sidebar.button("Запустить анализ"):
-    st.sidebar.success("C++ ядро успешно обработало файл!")
-# 3. Главная зона экрана (где врач видит результаты)
-st.subheader("Визуализация сигналов ЭКГ")
-# Если файл ЭКГ загружен, показываем графикif uploaded_ecg is not None:
-    # Имитируем чтение файла, который выдал C++ (clean_data.csv)
-    # В реальном проекте здесь будет: df = pd.read_csv('clean_data.csv', comment='#')
-    try:
-        df = pd.read_csv(uploaded_ecg, comment='#')
-       
-        # Строим красивый, летающий интерактивный график (можно зумить мышкой!)
-        fig = px.line(df, x='timestamp', y=['ch1', 'ch2', 'ch3'],
-                      title="Суточная лента ЭКГ (очищенный сигнал)",
-                      labels={'value': 'Напряжение (мВ)', 'timestamp': 'Время (сек)'})
-       
-        # Отображаем график на веб-странице
-        st.plotly_chart(fig, use_container_width=True)
-       
-    except Exception as e:
-        st.error(format(e))else:
-    st.info("💡 Пожалуйста, загрузите файл Холтера в боковой панели, чтобы увидеть график.")
+      import streamlit as stimport pandas as pdimport plotly.express as px
+      # 1. Настраиваем внешний вид страницы
+      st.set_page_config(page_title="CardioAI Module", layout="wide")
+      st.title("🫀 CardioAI: Модуль аналитики ЭКГ для B2B")
+      # 2. Делаем боковую панель управления (Sidebar)
+      st.sidebar.header("Управление проектом")uploaded_ecg = st.sidebar.file_uploader("Загрузить файл Холтера (RAW)", type=["txt", "csv", "edf"])uploaded_diary = st.sidebar.file_uploader("Импортировать электронный дневник", type=["csv", "json"])
+      # Кнопка запуска нашего C++ ядра (пока заглушка)if st.sidebar.button("Запустить анализ"):
+          st.sidebar.success("C++ ядро успешно обработало файл!")
+      # 3. Главная зона экрана (где врач видит результаты)
+      st.subheader("Визуализация сигналов ЭКГ")
+      # Если файл ЭКГ загружен, показываем графикif uploaded_ecg is not None:
+          # Имитируем чтение файла, который выдал C++ (clean_data.csv)
+          # В реальном проекте здесь будет: df = pd.read_csv('clean_data.csv', comment='#')
+          try:
+              df = pd.read_csv(uploaded_ecg, comment='#')
+             
+              # Строим красивый, летающий интерактивный график (можно зумить мышкой!)
+              fig = px.line(df, x='timestamp', y=['ch1', 'ch2', 'ch3'],
+                            title="Суточная лента ЭКГ (очищенный сигнал)",
+                            labels={'value': 'Напряжение (мВ)', 'timestamp': 'Время (сек)'})
+             
+              # Отображаем график на веб-странице
+              st.plotly_chart(fig, use_container_width=True)
+             
+          except Exception as e:
+              st.error(format(e))else:
+          st.info("💡 Пожалуйста, загрузите файл Холтера в боковой панели, чтобы увидеть график.")
 
 ## Шаг 3. Запуск приложения
 В терминале, находясь в папке с файлом app.py, введи команду:
