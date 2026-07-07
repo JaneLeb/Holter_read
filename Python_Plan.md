@@ -117,13 +117,13 @@ CustomTkinter
 Вот пошаговый план, как запустить первое рабочее окно:
 
 
-## Шаг 1. Установка
+##### Шаг 1. Установка
 В терминале твоего компьютера введи две команды (нужен интернет):
 
 pip install streamlit
 pip install pandas plotly
 
-## Шаг 2. Создание кода интерфейса
+##### Шаг 2. Создание кода интерфейса
 Создай файл app.py и скопируй туда этот простой код. Он уже умеет принимать файлы и рисовать графики!
 
       import streamlit as stimport pandas as pdimport plotly.express as px
@@ -154,7 +154,7 @@ pip install pandas plotly
               st.error(format(e))else:
           st.info("💡 Пожалуйста, загрузите файл Холтера в боковой панели, чтобы увидеть график.")
 
-## Шаг 3. Запуск приложения
+##### Шаг 3. Запуск приложения
 В терминале, находясь в папке с файлом app.py, введи команду:
 
 streamlit run app.py
@@ -169,9 +169,13 @@ streamlit run app.py
    3. Развернуть базовое локальное окно (на PyQt или Tkinter) с кнопкой «Загрузить файл» и пустым полем под график, куда мы потом выведем эту таблицу.
 
 
-## 3. Примеры реализации "умного" интерфейса врача
+##### Шаг 4. Примеры реализации "умного" интерфейса врача
+
+
 В таком интерфейсе графики из Plotly используются исключительно для контроля. Врач видит уже чистый сигнал и готовые подсказки нейросети, а также данные из электронного дневника пациента.
 Ниже представлен код интерфейса, который имитирует полную интеграцию:
+
+
 
       import streamlit as stimport pandas as pdimport numpy as npimport plotly.graph_objects as goimport json
       
@@ -289,108 +293,112 @@ streamlit run app.py
                   st.error("Удалено из отчета")
 
 
-Пример десктопного приложения врача (CustomTkinter)
+##### Шаг 5. Пример десктопного приложения врача (CustomTkinter)
+
+
 А это интерфейс, который работает на компьютере доктора. Чтобы графики Plotly открывались внутри десктопного Python-приложения и выглядели футуристично, используется небольшая хитрость — библиотека tkinterweb (она встраивает легковесный браузер прямо в окно программы) или стандартный вывод Plotly.
+
+
 Для работы кода нужно установить: 
 
-pip install customtkinter tkinterweb plotly pandas numpy.
-
-import customtkinter as ctkfrom tkinterweb import HtmlFrame  # Позволяет отобразить современный Plotly график внутри Tkinterimport plotly.graph_objects as goimport pandas as pdimport numpy as npimport sqlite3
-# Настройка стиля CustomTkinter (дизайн 2020-х годов)
-ctk.set_appearance_mode("Dark")  # Темная тема по умолчанию
-ctk.set_default_color_theme("blue")
-class DoctorApp(ctk.CTk):
-    def __init__(self):
-        super().__init__()
-       
-        self.title("Holter AI — Рабочее место кардиолога (Десктоп)")
-        self.geometry("1200x700")
-       
-        # Конфигурация сетки окон
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=3)
-        self.grid_rowconfigure(0, weight=1)
-       
-        # --- ЛЕВАЯ ПАНЕЛЬ: ЭЛЕКТРОННЫЙ ДНЕВНИК (ИЗ ИНТЕРНЕТА) ---
-        self.left_panel = ctk.CTkFrame(self, width=300, corner_radius=10)
-        self.left_panel.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-       
-        self.lbl_id = ctk.CTkLabel(self.left_panel, text="🆔 Обезличенный ID:", font=("Arial", 14, "bold"))
-        self.lbl_id.pack(pady=(20, 5), padx=10, anchor="w")
-       
-        self.entry_id = ctk.CTkEntry(self.left_panel, placeholder_text="Patient_99")
-        self.entry_id.pack(pady=5, padx=10, fill="x")
-       
-        self.btn_sync = ctk.CTkButton(self.left_panel, text="🔄 Синхронизировать с WEB", command=self.load_web_diary)
-        self.btn_sync.pack(pady=10, padx=10, fill="x")
-       
-        self.lbl_diary = ctk.CTkLabel(self.left_panel, text="📋 Записи из облака:", font=("Arial", 12, "bold"))
-        self.lbl_diary.pack(pady=(20, 5), padx=10, anchor="w")
-       
-        # Текстовое поле для вывода заметок пациента
-        self.txt_diary = ctk.CTkTextbox(self.left_panel, width=280, height=300)
-        self.txt_diary.pack(pady=5, padx=10, fill="both", expand=True)
-       
-        # --- ПРАВАЯ ПАНЕЛЬ: ГРАФИКИ (ОЧИЩЕННЫЙ C++ СИГНАЛ + ИИ) ---
-        self.right_panel = ctk.CTkFrame(self, corner_radius=10)
-        self.right_panel.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-       
-        self.lbl_graph = ctk.CTkLabel(self.right_panel, text="📊 Высокоточный анализ ЭКГ (Данные от C++ модуля и ИИ)", font=("Arial", 16, "bold"))
-        self.lbl_graph.pack(pady=10, padx=10, anchor="w")
-       
-        # Встраиваем веб-фрейм для отображения интерактивного графика Plotly
-        self.browser_frame = HtmlFrame(self.right_panel)
-        self.browser_frame.pack(pady=10, padx=10, fill="both", expand=True)
-       
-        # Отрисуем базовый пустой график при старте
-        self.plot_ecg_data()
-
-    def load_web_diary(self):
-        """Имитация скачивания обезличенных данных из интернет-БД"""
-        pid = self.entry_id.get()
-        if not pid:
-            self.txt_diary.insert("0.0", "Ошибка: Введите ID пациента\n")
-            return
+    pip install customtkinter tkinterweb plotly pandas numpy.
+    
+    import customtkinter as ctkfrom tkinterweb import HtmlFrame  # Позволяет отобразить современный Plotly график внутри Tkinterimport plotly.graph_objects as goimport pandas as pdimport numpy as npimport sqlite3
+    # Настройка стиля CustomTkinter (дизайн 2020-х годов)
+    ctk.set_appearance_mode("Dark")  # Темная тема по умолчанию
+    ctk.set_default_color_theme("blue")
+    class DoctorApp(ctk.CTk):
+        def __init__(self):
+            super().__init__()
            
-        try:
-            conn = sqlite3.connect("anonymous_diary.db")
-            cursor = conn.cursor()
-            cursor.execute("SELECT timestamp, note FROM diary WHERE patient_id = ?", (pid,))
-            rows = cursor.fetchall()
+            self.title("Holter AI — Рабочее место кардиолога (Десктоп)")
+            self.geometry("1200x700")
            
-            self.txt_diary.delete("0.0", "end")
-            if not rows:
-                self.txt_diary.insert("0.0", "Записей в облаке не найдено.")
-            for row in rows:
-                time_str = row[0].split(" ")[1] # Забираем только время HH:MM:SS
-                self.txt_diary.insert("end", f"⏱ {time_str}\n📝 {row[1]}\n\n")
-            conn.close()
-        except Exception as e:
-            self.txt_diary.insert("0.0", f"Ошибка сети/БД: {e}")
-
-    def plot_ecg_data(self):
-        """Генерация интерактивного графика Plotly и загрузка его в десктопное окно"""
-        # Симулируем обработанные C++ данные ЭКГ
-        t = np.linspace(0, 10, 2000)
-        ecg = np.sin(2 * np.pi * 1.2 * t) + 0.5 * np.sin(2 * np.pi * 2.4 * t)
-       
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=t, y=ecg, mode='lines', name='Чистый ЭКГ (C++)', line=dict(color='#00E5FF')))
-       
-        # Метка ИИ (например, нейросеть нашла аномалию)
-        fig.add_vline(x=4.2, line_width=2, line_dash="dash", line_color="red")
-        fig.add_annotation(x=4.2, y=1.2, text="ИИ: Экстрасистола", bgcolor="red", font=dict(color="white"))
-       
-        fig.update_layout(
-            template="plotly_dark",
-            margin=dict(l=20, r=20, t=20, b=20),
-            xaxis_title="Время (сек)",
-            yaxis_title="мВ"
-        )
-       
-        # Превращаем график Plotly в HTML-код и «скармливаем» встроенному в десктоп браузеру
-        html_content = fig.to_html(include_plotlyjs='cdn')
-        self.browser_frame.load_html(html_content)
-if __name__ == "__main__":
-    app = DoctorApp()
-    app.mainloop()
+            # Конфигурация сетки окон
+            self.grid_columnconfigure(0, weight=1)
+            self.grid_columnconfigure(1, weight=3)
+            self.grid_rowconfigure(0, weight=1)
+           
+            # --- ЛЕВАЯ ПАНЕЛЬ: ЭЛЕКТРОННЫЙ ДНЕВНИК (ИЗ ИНТЕРНЕТА) ---
+            self.left_panel = ctk.CTkFrame(self, width=300, corner_radius=10)
+            self.left_panel.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+           
+            self.lbl_id = ctk.CTkLabel(self.left_panel, text="🆔 Обезличенный ID:", font=("Arial", 14, "bold"))
+            self.lbl_id.pack(pady=(20, 5), padx=10, anchor="w")
+           
+            self.entry_id = ctk.CTkEntry(self.left_panel, placeholder_text="Patient_99")
+            self.entry_id.pack(pady=5, padx=10, fill="x")
+           
+            self.btn_sync = ctk.CTkButton(self.left_panel, text="🔄 Синхронизировать с WEB", command=self.load_web_diary)
+            self.btn_sync.pack(pady=10, padx=10, fill="x")
+           
+            self.lbl_diary = ctk.CTkLabel(self.left_panel, text="📋 Записи из облака:", font=("Arial", 12, "bold"))
+            self.lbl_diary.pack(pady=(20, 5), padx=10, anchor="w")
+           
+            # Текстовое поле для вывода заметок пациента
+            self.txt_diary = ctk.CTkTextbox(self.left_panel, width=280, height=300)
+            self.txt_diary.pack(pady=5, padx=10, fill="both", expand=True)
+           
+            # --- ПРАВАЯ ПАНЕЛЬ: ГРАФИКИ (ОЧИЩЕННЫЙ C++ СИГНАЛ + ИИ) ---
+            self.right_panel = ctk.CTkFrame(self, corner_radius=10)
+            self.right_panel.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+           
+            self.lbl_graph = ctk.CTkLabel(self.right_panel, text="📊 Высокоточный анализ ЭКГ (Данные от C++ модуля и ИИ)", font=("Arial", 16, "bold"))
+            self.lbl_graph.pack(pady=10, padx=10, anchor="w")
+           
+            # Встраиваем веб-фрейм для отображения интерактивного графика Plotly
+            self.browser_frame = HtmlFrame(self.right_panel)
+            self.browser_frame.pack(pady=10, padx=10, fill="both", expand=True)
+           
+            # Отрисуем базовый пустой график при старте
+            self.plot_ecg_data()
+    
+        def load_web_diary(self):
+            """Имитация скачивания обезличенных данных из интернет-БД"""
+            pid = self.entry_id.get()
+            if not pid:
+                self.txt_diary.insert("0.0", "Ошибка: Введите ID пациента\n")
+                return
+               
+            try:
+                conn = sqlite3.connect("anonymous_diary.db")
+                cursor = conn.cursor()
+                cursor.execute("SELECT timestamp, note FROM diary WHERE patient_id = ?", (pid,))
+                rows = cursor.fetchall()
+               
+                self.txt_diary.delete("0.0", "end")
+                if not rows:
+                    self.txt_diary.insert("0.0", "Записей в облаке не найдено.")
+                for row in rows:
+                    time_str = row[0].split(" ")[1] # Забираем только время HH:MM:SS
+                    self.txt_diary.insert("end", f"⏱ {time_str}\n📝 {row[1]}\n\n")
+                conn.close()
+            except Exception as e:
+                self.txt_diary.insert("0.0", f"Ошибка сети/БД: {e}")
+    
+        def plot_ecg_data(self):
+            """Генерация интерактивного графика Plotly и загрузка его в десктопное окно"""
+            # Симулируем обработанные C++ данные ЭКГ
+            t = np.linspace(0, 10, 2000)
+            ecg = np.sin(2 * np.pi * 1.2 * t) + 0.5 * np.sin(2 * np.pi * 2.4 * t)
+           
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=t, y=ecg, mode='lines', name='Чистый ЭКГ (C++)', line=dict(color='#00E5FF')))
+           
+            # Метка ИИ (например, нейросеть нашла аномалию)
+            fig.add_vline(x=4.2, line_width=2, line_dash="dash", line_color="red")
+            fig.add_annotation(x=4.2, y=1.2, text="ИИ: Экстрасистола", bgcolor="red", font=dict(color="white"))
+           
+            fig.update_layout(
+                template="plotly_dark",
+                margin=dict(l=20, r=20, t=20, b=20),
+                xaxis_title="Время (сек)",
+                yaxis_title="мВ"
+            )
+           
+            # Превращаем график Plotly в HTML-код и «скармливаем» встроенному в десктоп браузеру
+            html_content = fig.to_html(include_plotlyjs='cdn')
+            self.browser_frame.load_html(html_content)
+    if __name__ == "__main__":
+        app = DoctorApp()
+        app.mainloop()
