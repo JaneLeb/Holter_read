@@ -213,7 +213,7 @@ CustomTkinter
 pip install streamlit
 pip install pandas plotly
 
-#####  <img width="32" height="32" alt="image" src="https://github.com/user-attachments/assets/fa1236a3-e034-4392-a02d-9575be9e901e" /> Шаг 2. Создание кода интерфейса
+##### 📝Шаг 2. Создание кода интерфейса
 Создай файл app.py и скопируй туда этот простой код. Он уже умеет принимать файлы и рисовать графики!
 
       import streamlit as stimport pandas as pdimport plotly.express as px
