@@ -90,7 +90,86 @@ CustomTkinter
    1. Простой (файловый): C++ модуль сохраняет очищенный сигнал в бинарный файл или CSV, а нейросеть записывает результаты анализа (таймштампы аритмий, класс патологии) в JSON-файл. Python просто читает эти готовые файлы.
    2. Продвинутый (API): C++ и нейросеть обернуты в легковесный сервис, который отдаёт интерфейсу готовый массив точек и разметку по запросу.
 
-## 2. Пример реализации "умного" интерфейса врача
+## Архитектура синхронизации данных
+
+   1. Пациент заходит на сайт со смартфона, вводит свой анонимный Patient_ID (например, ⚡️ AK-4702) и пишет жалобу: «14:30 — закружилась голова».
+   2. Данные улетают в облачную базу.
+   3. Врач нажимает кнопку «Синхронизировать» в своем десктоп-приложении.
+   4. Десктоп скачивает по API/интернету текстовые логи дневника, а локальный C++ модуль параллельно обрабатывает файл Холтера. На графике ЭКГ автоматически появляется красная метка ИИ именно на отметке 14:30.
+
+Для такой архитектуры нужен разделенный стек: настольное приложение для врача (где происходит вся «тяжелая» работа с графиками и файлами) и защищенное веб-приложение в интернете для пациентов, откуда десктоп будет забирать обезличенные записи дневников.
+
+Дневники не хранят фио и паспорта пациентов в интернете. На веб-сервере лежат только сухие логи симптомов под анонимными хэш-ключами. Сопоставление с реальной картой пациента происходит строго локально на ПК врача внутри больничного контура». Это огромный плюс в глазах экспертов трека MedTech.
+
+Разделение вычислений: C++ модуль молотит тяжелые гигабайтные файлы локально на ПК, а сеть используется только для передачи легких текстовых заметок (пару килобайт). Приложение не будет зависать и требовать сверхскоростного интернета.
+
+В рамках студенческого акселератора лучшим решением по скорости разработки и визуальной эстетике, скорее всего, будет следующая связка:
+
+* Десктоп врача: CustomTkinter + Plotly (встроенный через браузерный виджет) или PyQt6. Это даст современный UI в стиле Windows 11 / macOS и избавит от «вида из 90-х».
+* Веб-дневник пациента: Легковесный сайт на Streamlit (для MVP), развернутый в облаке, который сохраняет записи в простую базу данных (например, SQLite или PostgreSQL).
+
+   
+   
+## С чего начать прямо сейчас
+Задача по UI: Изучить Streamlit или CustomTkinter и набросать интерфейс: слева — панель загрузки файлов и кнопка «Импорт дневника», справа — большое окно под график ЭКГ с флажками.
+
+
+Вот пошаговый план, как запустить первое рабочее окно:
+
+
+## Шаг 1. Установка
+В терминале твоего компьютера введи две команды (нужен интернет):
+
+pip install streamlit
+pip install pandas plotly
+
+## Шаг 2. Создание кода интерфейса
+Создай файл app.py и скопируй туда этот простой код. Он уже умеет принимать файлы и рисовать графики!
+
+      import streamlit as stimport pandas as pdimport plotly.express as px
+      # 1. Настраиваем внешний вид страницы
+      st.set_page_config(page_title="CardioAI Module", layout="wide")
+      st.title("🫀 CardioAI: Модуль аналитики ЭКГ для B2B")
+      # 2. Делаем боковую панель управления (Sidebar)
+      st.sidebar.header("Управление проектом")uploaded_ecg = st.sidebar.file_uploader("Загрузить файл Холтера (RAW)", type=["txt", "csv", "edf"])uploaded_diary = st.sidebar.file_uploader("Импортировать электронный дневник", type=["csv", "json"])
+      # Кнопка запуска нашего C++ ядра (пока заглушка)if st.sidebar.button("Запустить анализ"):
+          st.sidebar.success("C++ ядро успешно обработало файл!")
+      # 3. Главная зона экрана (где врач видит результаты)
+      st.subheader("Визуализация сигналов ЭКГ")
+      # Если файл ЭКГ загружен, показываем графикif uploaded_ecg is not None:
+          # Имитируем чтение файла, который выдал C++ (clean_data.csv)
+          # В реальном проекте здесь будет: df = pd.read_csv('clean_data.csv', comment='#')
+          try:
+              df = pd.read_csv(uploaded_ecg, comment='#')
+             
+              # Строим красивый, летающий интерактивный график (можно зумить мышкой!)
+              fig = px.line(df, x='timestamp', y=['ch1', 'ch2', 'ch3'],
+                            title="Суточная лента ЭКГ (очищенный сигнал)",
+                            labels={'value': 'Напряжение (мВ)', 'timestamp': 'Время (сек)'})
+             
+              # Отображаем график на веб-странице
+              st.plotly_chart(fig, use_container_width=True)
+             
+          except Exception as e:
+              st.error(format(e))else:
+          st.info("💡 Пожалуйста, загрузите файл Холтера в боковой панели, чтобы увидеть график.")
+
+## Шаг 3. Запуск приложения
+В терминале, находясь в папке с файлом app.py, введи команду:
+
+streamlit run app.py
+
+У тебя автоматически откроется вкладка в браузере, где будет красивый, современный интерфейс с кнопками загрузки и интерактивным графиком, который можно приближать и крутить!
+
+Когда будет скомпилирован С++ файл core.exe, нужно просто вставить команду его вызова прямо внутрь функции кнопки if st.sidebar.button.
+
+ЗАДАЧА
+ 1. Написать скрипт на Python, который умеет запускать внешнюю консольную утилиту (core.exe на C++) с помощью модуля subprocess или os.system.
+   2. Сделать так, чтобы после отработки С++ утилиты Питон скрипт брал готовый текстовый файл clean_data.csv и с помощью библиотеки Pandas (pd.read_csv) за одну строчку превращал его в DataFrame (таблицу).
+   3. Развернуть базовое локальное окно (на PyQt или Tkinter) с кнопкой «Загрузить файл» и пустым полем под график, куда мы потом выведем эту таблицу.
+
+
+## 3. Примеры реализации "умного" интерфейса врача
 В таком интерфейсе графики из Plotly используются исключительно для контроля. Врач видит уже чистый сигнал и готовые подсказки нейросети, а также данные из электронного дневника пациента.
 Ниже представлен код интерфейса, который имитирует полную интеграцию:
 
@@ -208,62 +287,110 @@ CustomTkinter
                   st.success("Отправлено в электронную карту пациента!")
               if v_col2.button("❌ Ложное срабатывание", key=f"rej_{i}"):
                   st.error("Удалено из отчета")
-   
-   
-## С чего начать прямо сейчас
-Задача по UI: Изучить Streamlit или CustomTkinter и набросать интерфейс: слева — панель загрузки файлов и кнопка «Импорт дневника», справа — большое окно под график ЭКГ с флажками.
 
 
-Вот пошаговый план, как запустить первое рабочее окно:
+Пример десктопного приложения врача (CustomTkinter)
+А это интерфейс, который работает на компьютере доктора. Чтобы графики Plotly открывались внутри десктопного Python-приложения и выглядели футуристично, используется небольшая хитрость — библиотека tkinterweb (она встраивает легковесный браузер прямо в окно программы) или стандартный вывод Plotly.
+Для работы кода нужно установить: 
 
+pip install customtkinter tkinterweb plotly pandas numpy.
 
-## Шаг 1. Установка
-В терминале твоего компьютера введи две команды (нужен интернет):
+import customtkinter as ctkfrom tkinterweb import HtmlFrame  # Позволяет отобразить современный Plotly график внутри Tkinterimport plotly.graph_objects as goimport pandas as pdimport numpy as npimport sqlite3
+# Настройка стиля CustomTkinter (дизайн 2020-х годов)
+ctk.set_appearance_mode("Dark")  # Темная тема по умолчанию
+ctk.set_default_color_theme("blue")
+class DoctorApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+       
+        self.title("Holter AI — Рабочее место кардиолога (Десктоп)")
+        self.geometry("1200x700")
+       
+        # Конфигурация сетки окон
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=3)
+        self.grid_rowconfigure(0, weight=1)
+       
+        # --- ЛЕВАЯ ПАНЕЛЬ: ЭЛЕКТРОННЫЙ ДНЕВНИК (ИЗ ИНТЕРНЕТА) ---
+        self.left_panel = ctk.CTkFrame(self, width=300, corner_radius=10)
+        self.left_panel.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+       
+        self.lbl_id = ctk.CTkLabel(self.left_panel, text="🆔 Обезличенный ID:", font=("Arial", 14, "bold"))
+        self.lbl_id.pack(pady=(20, 5), padx=10, anchor="w")
+       
+        self.entry_id = ctk.CTkEntry(self.left_panel, placeholder_text="Patient_99")
+        self.entry_id.pack(pady=5, padx=10, fill="x")
+       
+        self.btn_sync = ctk.CTkButton(self.left_panel, text="🔄 Синхронизировать с WEB", command=self.load_web_diary)
+        self.btn_sync.pack(pady=10, padx=10, fill="x")
+       
+        self.lbl_diary = ctk.CTkLabel(self.left_panel, text="📋 Записи из облака:", font=("Arial", 12, "bold"))
+        self.lbl_diary.pack(pady=(20, 5), padx=10, anchor="w")
+       
+        # Текстовое поле для вывода заметок пациента
+        self.txt_diary = ctk.CTkTextbox(self.left_panel, width=280, height=300)
+        self.txt_diary.pack(pady=5, padx=10, fill="both", expand=True)
+       
+        # --- ПРАВАЯ ПАНЕЛЬ: ГРАФИКИ (ОЧИЩЕННЫЙ C++ СИГНАЛ + ИИ) ---
+        self.right_panel = ctk.CTkFrame(self, corner_radius=10)
+        self.right_panel.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+       
+        self.lbl_graph = ctk.CTkLabel(self.right_panel, text="📊 Высокоточный анализ ЭКГ (Данные от C++ модуля и ИИ)", font=("Arial", 16, "bold"))
+        self.lbl_graph.pack(pady=10, padx=10, anchor="w")
+       
+        # Встраиваем веб-фрейм для отображения интерактивного графика Plotly
+        self.browser_frame = HtmlFrame(self.right_panel)
+        self.browser_frame.pack(pady=10, padx=10, fill="both", expand=True)
+       
+        # Отрисуем базовый пустой график при старте
+        self.plot_ecg_data()
 
-pip install streamlit
-pip install pandas plotly
+    def load_web_diary(self):
+        """Имитация скачивания обезличенных данных из интернет-БД"""
+        pid = self.entry_id.get()
+        if not pid:
+            self.txt_diary.insert("0.0", "Ошибка: Введите ID пациента\n")
+            return
+           
+        try:
+            conn = sqlite3.connect("anonymous_diary.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT timestamp, note FROM diary WHERE patient_id = ?", (pid,))
+            rows = cursor.fetchall()
+           
+            self.txt_diary.delete("0.0", "end")
+            if not rows:
+                self.txt_diary.insert("0.0", "Записей в облаке не найдено.")
+            for row in rows:
+                time_str = row[0].split(" ")[1] # Забираем только время HH:MM:SS
+                self.txt_diary.insert("end", f"⏱ {time_str}\n📝 {row[1]}\n\n")
+            conn.close()
+        except Exception as e:
+            self.txt_diary.insert("0.0", f"Ошибка сети/БД: {e}")
 
-## Шаг 2. Создание кода интерфейса
-Создай файл app.py и скопируй туда этот простой код. Он уже умеет принимать файлы и рисовать графики!
-
-      import streamlit as stimport pandas as pdimport plotly.express as px
-      # 1. Настраиваем внешний вид страницы
-      st.set_page_config(page_title="CardioAI Module", layout="wide")
-      st.title("🫀 CardioAI: Модуль аналитики ЭКГ для B2B")
-      # 2. Делаем боковую панель управления (Sidebar)
-      st.sidebar.header("Управление проектом")uploaded_ecg = st.sidebar.file_uploader("Загрузить файл Холтера (RAW)", type=["txt", "csv", "edf"])uploaded_diary = st.sidebar.file_uploader("Импортировать электронный дневник", type=["csv", "json"])
-      # Кнопка запуска нашего C++ ядра (пока заглушка)if st.sidebar.button("Запустить анализ"):
-          st.sidebar.success("C++ ядро успешно обработало файл!")
-      # 3. Главная зона экрана (где врач видит результаты)
-      st.subheader("Визуализация сигналов ЭКГ")
-      # Если файл ЭКГ загружен, показываем графикif uploaded_ecg is not None:
-          # Имитируем чтение файла, который выдал C++ (clean_data.csv)
-          # В реальном проекте здесь будет: df = pd.read_csv('clean_data.csv', comment='#')
-          try:
-              df = pd.read_csv(uploaded_ecg, comment='#')
-             
-              # Строим красивый, летающий интерактивный график (можно зумить мышкой!)
-              fig = px.line(df, x='timestamp', y=['ch1', 'ch2', 'ch3'],
-                            title="Суточная лента ЭКГ (очищенный сигнал)",
-                            labels={'value': 'Напряжение (мВ)', 'timestamp': 'Время (сек)'})
-             
-              # Отображаем график на веб-странице
-              st.plotly_chart(fig, use_container_width=True)
-             
-          except Exception as e:
-              st.error(format(e))else:
-          st.info("💡 Пожалуйста, загрузите файл Холтера в боковой панели, чтобы увидеть график.")
-
-## Шаг 3. Запуск приложения
-В терминале, находясь в папке с файлом app.py, введи команду:
-
-streamlit run app.py
-
-У тебя автоматически откроется вкладка в браузере, где будет красивый, современный интерфейс с кнопками загрузки и интерактивным графиком, который можно приближать и крутить!
-
-Когда будет скомпилирован С++ файл core.exe, нужно просто вставить команду его вызова прямо внутрь функции кнопки if st.sidebar.button.
-
-ЗАДАЧА
- 1. Написать скрипт на Python, который умеет запускать внешнюю консольную утилиту (core.exe на C++) с помощью модуля subprocess или os.system.
-   2. Сделать так, чтобы после отработки С++ утилиты Питон скрипт брал готовый текстовый файл clean_data.csv и с помощью библиотеки Pandas (pd.read_csv) за одну строчку превращал его в DataFrame (таблицу).
-   3. Развернуть базовое локальное окно (на PyQt или Tkinter) с кнопкой «Загрузить файл» и пустым полем под график, куда мы потом выведем эту таблицу.
+    def plot_ecg_data(self):
+        """Генерация интерактивного графика Plotly и загрузка его в десктопное окно"""
+        # Симулируем обработанные C++ данные ЭКГ
+        t = np.linspace(0, 10, 2000)
+        ecg = np.sin(2 * np.pi * 1.2 * t) + 0.5 * np.sin(2 * np.pi * 2.4 * t)
+       
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=t, y=ecg, mode='lines', name='Чистый ЭКГ (C++)', line=dict(color='#00E5FF')))
+       
+        # Метка ИИ (например, нейросеть нашла аномалию)
+        fig.add_vline(x=4.2, line_width=2, line_dash="dash", line_color="red")
+        fig.add_annotation(x=4.2, y=1.2, text="ИИ: Экстрасистола", bgcolor="red", font=dict(color="white"))
+       
+        fig.update_layout(
+            template="plotly_dark",
+            margin=dict(l=20, r=20, t=20, b=20),
+            xaxis_title="Время (сек)",
+            yaxis_title="мВ"
+        )
+       
+        # Превращаем график Plotly в HTML-код и «скармливаем» встроенному в десктоп браузеру
+        html_content = fig.to_html(include_plotlyjs='cdn')
+        self.browser_frame.load_html(html_content)
+if __name__ == "__main__":
+    app = DoctorApp()
+    app.mainloop()
