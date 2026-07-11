@@ -78,3 +78,287 @@
 > Для ≥ 90% найденных высокоамплитудных пиков (QRS) в ретроспективном временном окне \([-200 \text{ мс}; -120 \text{ мс}]\) обнаруживается стабильный по форме локальный максимум амплитудой 100--250 мкВ, а математическое ожидание расстояния между соседними высокими пиками находится в диапазоне, эквивалентном 60--90 ударам в минуту в состоянии покоя.
 
 Если в массиве чисел перед высоким пиком этого маленького математического горбика нет (там ровные числа или хаотичный шум), либо расстояние до него постоянно прыгает --- алгоритм фиксирует отклонение от нормы (например, фибрилляцию предсердий или миграцию водителя ритма).
+
+
+## Правило для экстрасисотолы
+
+Вот готовое математическое правило и техническое задание (ТЗ) для разработчиков/скрипта по автоматическому поиску и классификации экстрасистол в числовом массиве данных (TXT/EDF).
+
+* * * * *
+
+ЧАСТЬ 1. Математическое правило (Алгоритм)
+
+Чтобы перевести слова врача «пришел раньше времени» и «деформирован/расширен» на язык чисел, алгоритму требуются две базовые метрики, которые вычисляются для каждого найденного QRS-комплекса (высокого пика):
+
+1.  Интервал \(RR_{i}\) --- расстояние в миллисекундах (или строках текста) от текущего пика до предыдущего.
+2.  Ширина комплекса (Длительность QRS) --- количество миллисекунд от начала резкого взлета сигнала до его возвращения к изолинии.
+
+1\. Правило «Преждевременности» (Пришел раньше времени)
+
+Вычисляется скользящее среднее значение предыдущих 5--10 нормальных интервалов \(RR_{avg}\).
+
+-   Условие: Текущий интервал \(RR_i < 0.8 \times RR_{avg}\) (то есть удар произошел как минимум на 20% быстрее, чем ожидалось по текущему среднему пульсу).
+
+2\. Правило «Ширины и деформации» (Желудочковая vs Наджелудочковая)
+
+-   Наджелудочковая экстрасистола (S / СВЭ):
+    -   Комплекс пришел преждевременно (\(RR_i < 0.8 \times RR_{avg}\)).
+    -   Длительность (ширина) комплекса осталась узкой: \(< 100 \text{ мс}\).
+    -   Форма сигнала (числовой массив пика) коррелирует с нормальным ударом пациента более чем на 90%.
+-   Желудочковая экстрасистола (V / ЖЭ):
+    -   Комплекс пришел преждевременно (\(RR_i < 0.8 \times RR_{avg}\)).
+    -   Длительность (ширина) комплекса расширена: \(> 120 \text{ мс}\).
+    -   Форма сигнала кардинально изменена (коэффициент корреляции с нормальным QRS-комплексом меньше 70%). После нее обычно следует компенсаторная пауза (следующий интервал \(RR_{i+1}\) длиннее обычного).
+
+* * * * *
+
+ЧАСТЬ 2. Техническое задание (ТЗ) для разработчика
+
+Тема: Разработка модуля детекции и группировки экстрасистол по текстовым массивам ЭКГ (TXT/EDF)
+
+1\. Входные данные
+
+-   Одномерный или многомерный массив чисел (тип данных: `int` или `float`), представляющий значения амплитуды ЭКГ-сигнала в микровольтах (мкВ).
+-   Переменная `Sampling_Rate` (частота дискретизации, например, 250 или 500 Гц) для перевода шага строк во временные интервалы (мс).
+-   Предварительно размеченные координаты (индексы строк) вершин нормальных R-зубцов.
+
+2\. Требования к функционалу алгоритма
+
+Блок А. Классификация одиночных событий
+
+Алгоритм должен в цикле пройти по всем вершинам R-зубцов и присвоить каждому пику одну из трех меток (`N` --- норма, `S` --- наджелудочковая, `V` --- желудочковая) на основе следующих критериев:
+
+Вот готовая архитектура модуля на C++ (стандарт C++17). Код спроектирован с учетом высокой производительности, что критично для обработки больших массивов данных суточного мониторирования (около 100 000 кардиоциклов).Структура данных и заголовочный файл (HeartAnalyzer.h)cpp#pragma once
+    #include <vector>
+    #include <string>
+
+    // Перечисление для типов сокращений
+    enum class BeatType {
+        Normal,          // N - Норма
+        Supraventricular, // S - Наджелудочковая экстрасистола
+        Ventricular,      // V - Желудочковая экстрасистола
+        Artifact         // Шум / Помеха
+    };
+    
+    // Структура найденного R-пика
+    struct RPeak {
+        size_t index;       // Номер строки (индекс) в текстовом файле / массиве
+        double timestampMs; // Время в миллисекундах от начала записи
+        double amplitude;   // Амплитуда в мкВ
+        double durationMs;  // Ширина QRS-комплекса в мс
+        BeatType type = BeatType::Normal;
+    };
+    
+    // Итоговая статистика для отчета
+    struct HolterReport {
+        size_t totalBeats = 0;
+        size_t singleSVE = 0; // Одиночные наджелудочковые
+        size_t pairSVE = 0;   // Парные наджелудочковые
+        size_t singleVE = 0;  // Одиночные желудочковые
+        size_t pairVE = 0;    // Парные желудочковые
+        size_t vtRuns = 0;    // Пробежки желудочковой тахикардии (>=3 подряд)
+    };
+    
+    class HeartAnalyzer {
+    private:
+        int samplingRate;
+        double msPerSample;
+    
+        // Вспомогательные методы математического анализа
+        double calculateMovingAverageRR(const std::vector<RPeak>& peaks, size_t currentIndex, size_t windowSize = 5);
+        double calculateCorrelation(const std::vector<double>& rawSignal, const RPeak& current, const RPeak& templatePeak);
+    
+    public:
+        HeartAnalyzer(int fs) : samplingRate(fs) {
+            msPerSample = 1000.0 / fs;
+        }
+    
+        void classifyBeats(const std::vector<double>& rawSignal, std::vector<RPeak>& peaks, const RPeak& normalTemplate);
+        HolterReport generateReport(const std::vector<RPeak>& classifiedPeaks);
+    };
+    Используйте код с осторожностью.Реализация алгоритма (HeartAnalyzer.cpp)cpp#include "HeartAnalyzer.h"
+    #include <cmath>
+    #include <numeric>
+    #include <algorithm>
+    
+    // Вычисление скользящего среднего для RR-интервалов (динамическая норма пульса)
+    double HeartAnalyzer::calculateMovingAverageRR(const std::vector<RPeak>& peaks, size_t currentIndex, size_t windowSize) {
+        if (currentIndex == 0) return 0.0;
+        
+        size_t start = (currentIndex > windowSize) ? currentIndex - windowSize : 0;
+        double sum = 0.0;
+        size_t count = 0;
+    
+        for (size_t i = start; i < currentIndex; ++i) {
+            sum += (peaks[i + 1].timestampMs - peaks[i].timestampMs);
+            count++;
+        }
+        return (count > 0) ? (sum / count) : 800.0; // 800 мс — дефолт (75 уд/мин), если данных мало
+    }
+    
+    // Коэффициент корреляции Пирсона между формой текущего комплекса и эталона нормы
+    double HeartAnalyzer::calculateCorrelation(const std::vector<double>& rawSignal, const RPeak& current, const RPeak& templatePeak) {
+        // Окно анализа: 40 мс до пика и 60 мс после пика R
+        int preSamples = static_cast<int>(40.0 / msPerSample);
+        int postSamples = static_cast<int>(60.0 / msPerSample);
+    
+        double sumX = 0, sumY = 0, sumXY = 0;
+        double sumX2 = 0, sumY2 = 0;
+        int n = 0;
+    
+        for (int i = -preSamples; i <= postSamples; ++i) {
+            size_t idxCurrent = current.index + i;
+            size_t idxTemplate = templatePeak.index + i;
+    
+            if (idxCurrent >= rawSignal.size() || idxTemplate >= rawSignal.size()) continue;
+    
+            double x = rawSignal[idxCurrent];
+            double y = rawSignal[idxTemplate];
+    
+            sumX += x;
+            sumY += y;
+            sumXY += x * y;
+            sumX2 += x * x;
+            sumY2 += y * y;
+            n++;
+        }
+    
+        if (n == 0) return 0.0;
+        double num = (n * sumXY) - (sumX * sumY);
+        double den = std::sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+        
+        return (den == 0) ? 0.0 : (num / den);
+    }
+    
+    // Основной блок классификации (Блок А из ТЗ)
+    void HeartAnalyzer::classifyBeats(const std::vector<double>& rawSignal, std::vector<RPeak>& peaks, const RPeak& normalTemplate) {
+        if (peaks.size() < 2) return;
+    
+        // Первый комплекс принимаем за условную норму, так как нет предыдущего RR
+        peaks[0].type = BeatType::Normal;
+    
+        for (size_t i = 1; i < peaks.size(); ++i) {
+            double currentRR = peaks[i].timestampMs - peaks[i - 1].timestampMs;
+            double avgRR = calculateMovingAverageRR(peaks, i);
+    
+            // Правило 1: Проверка на преждевременность (пришел раньше на 20%+)
+            bool isPremature = (currentRR < 0.8 * avgRR);
+    
+            if (isPremature) {
+                double correlation = calculateCorrelation(rawSignal, peaks[i], normalTemplate);
+    
+                // Правило 2: Анализ уширения и изменения формы
+                if (peaks[i].durationMs > 120.0 && correlation < 0.7) {
+                    peaks[i].type = BeatType::Ventricular;       // V - Желудочковая
+                } 
+                else if (peaks[i].durationMs < 100.0 && correlation >= 0.85) {
+                    peaks[i].type = BeatType::Supraventricular; // S - Наджелудочковая
+                } 
+                else {
+                    peaks[i].type = BeatType::Normal; // Либо пограничный случай, трактуем как норму
+                }
+            } else {
+                peaks[i].type = BeatType::Normal;
+            }
+        }
+    }
+    
+    // Анализ групповых событий и сбор статистики (Блок Б из ТЗ)
+    HolterReport HeartAnalyzer::generateReport(const std::vector<RPeak>& classifiedPeaks) {
+        HolterReport report;
+        report.totalBeats = classifiedPeaks.size();
+        if (classifiedPeaks.empty()) return report;
+    
+        size_t i = 0;
+        while (i < classifiedPeaks.size()) {
+            if (classifiedPeaks[i].type == BeatType::Ventricular) {
+                size_t runLength = 0;
+                while (i < classifiedPeaks.size() && classifiedPeaks[i].type == BeatType::Ventricular) {
+                    runLength++;
+                    i++;
+                }
+                if (runLength == 1) report.singleVE++;
+                else if (runLength == 2) report.pairVE++;
+                else if (runLength >= 3) report.vtRuns++;
+            }
+            else if (classifiedPeaks[i].type == BeatType::Supraventricular) {
+                size_t runLength = 0;
+                while (i < classifiedPeaks.size() && classifiedPeaks[i].type == BeatType::Supraventricular) {
+                    runLength++;
+                    i++;
+                }
+                if (runLength == 1) report.singleSVE++;
+                else if (runLength == 2) report.pairSVE++;
+                // СВ-пробежки при желании можно добавить аналогично
+            }
+            else {
+                i++;
+            }
+        }
+        return report;
+    }
+    
+    
+    Используйте код с осторожностью.Как это использовать в основном цикле программы (main.cpp):cpp#include <iostream>
+    #include <vector>
+    #include "HeartAnalyzer.h"
+    
+    int main() {
+        int fs = 250; // Частота дискретизации комплексов Валента/Медиком
+        HeartAnalyzer analyzer(fs);
+    
+        // Имитация входных данных из TXT файла (массив амплитуд ЭКГ)
+        std::vector<double> rawSignal = { /* Миллионы чисел из текстового файла */ };
+    
+        // Массив предварительно найденных пиков (заполняется R-детектором)
+        std::vector<RPeak> detectedPeaks = {
+            // индекс в файле, время в мс, амплитуда, длительность QRS
+            { 250,  1000.0, 1200.0, 85.0 }, 
+            { 450,  1800.0, 1180.0, 88.0 }, // Нормальный ритм (интервал 800мс)
+            { 600,  2400.0, 950.0,  140.0 }, // Преждевременный (600мс) и широкий (140мс) -> Желудочковая
+            { 850,  3400.0, 1210.0, 84.0 }
+        };
+    
+        // В качестве эталона берем гарантированно нормальный комплекс пациента (например, самый первый)
+        RPeak normalTemplate = detectedPeaks[0];
+    
+        // 1. Запуск классификатора
+        analyzer.classifyBeats(rawSignal, detectedPeaks, normalTemplate);
+    
+        // 2. Сбор статистики по парам и пробежкам
+        HolterReport report = analyzer.generateReport(detectedPeaks);
+    
+        // 3. Вывод результатов в консоль МИС / Системы
+        std::cout << "=== ОТЧЕТ АНАЛИЗА ХОЛТЕРА ===\n";
+        std::cout << "Всего сокращений: " << report.totalBeats << "\n";
+        std::cout << "Одиночных желудочковых (VE): " << report.singleVE << "\n";
+        std::cout << "Парных желудочковых (Pair VE): " << report.pairVE << "\n";
+        std::cout << "Пробежек ЖТ (VT Runs): " << report.vtRuns << "\n";
+        std::cout << "Одиночных наджелудочковых (SVE): " << report.singleSVE << "\n";
+    
+        return 0;
+    }
+
+Особенности интеграции этой логики в ваш проект:Мьютексы и многопоточность: Если вы будете обрабатывать суточный холтер в GUI-потоке, интерфейс «зависнет» примерно на 1.5–2 секунды на слабом ПК. Этот класс легко выносится в std::async или std::thread, так как он работает с константными ссылками на входящие сигналы и не имеет общего изменяемого состояния (thread-safe).Память: Для оптимизации работы по памяти структуры используют size_t index для ссылок на вектор исходного сигнала вместо копирования подмассивов точек.
+
+
+
+
+Блок Б. Анализ топики и группировки (Пары и Пробежки)
+
+После присвоения меток каждому удару, алгоритм должен проанализировать последовательности и сгруппировать их:
+
+1.  Одиночные: Метка `V` или `S` окружена с двух сторон метками `N` (Пример: `N - N - V - N - N`).
+2.  Парные (Куплеты): Две экстрасистолы подряд одного типа (Пример: `N - V - V - N` или `N - S - S - N`).
+3.  Пробежки (Групповые): Три и более экстрасистол подряд. Если подряд идет от 3 до 5 меток `V`, регистрировать как *«короткую пробежку желудочковой тахикардии»*. Если больше 5 --- как *«устойчивый пароксизм»*.
+
+3\. Выходные данные и отчетность
+
+Модуль должен возвращать структурированный объект (например, JSON-файл) со следующей статистикой исследования:
+
+-   Общее количество обработанных QRS-комплексов.
+-   Количество одиночных `S` и `V` экстрасистол.
+-   Количество парных `S` и `V` экстрасистол.
+-   Массив таймстампов (индексов времени) для всех обнаруженных пробежек (для последующего вывода врачу на экран).
+
+* * * * *
