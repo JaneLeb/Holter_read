@@ -133,8 +133,8 @@
 ## 4. Как проверить готовую нейросеть?
 После обучения мы переводим модель в режим проверки (model.eval()) и даем ей совершенно новую картинку из интернета, которую она никогда раньше не видела:
 
-# Загружаем одно новое фотоfrom PIL import Imageimg = Image.open("unknown_animal.jpg")img_tensor = transform(img).unsqueeze(0) # Превращаем в нужный формат\
-# Переводим сеть в режим предсказания
+      # Загружаем одно новое фотоfrom PIL import Imageimg = Image.open("unknown_animal.jpg")img_tensor = transform(img).unsqueeze(0) # Превращаем в нужный формат\
+      # Переводим сеть в режим предсказания
 
         model.eval()with torch.no_grad():
             prediction = model(img_tensor)
