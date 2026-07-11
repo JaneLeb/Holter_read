@@ -362,3 +362,727 @@
 -   Массив таймстампов (индексов времени) для всех обнаруженных пробежек (для последующего вывода врачу на экран).
 
 * * * * *
+Вот математическое правило, техническое задание и готовая реализация на C++ (стандарт C++17) для детекции пауз и их дифференциации от технического шума (отклеивания электрода).
+
+* * * * *
+
+ЧАСТЬ 1. Математическое правило (Алгоритм)
+
+Чтобы отличить реальную остановку сердца (асистолию/блокаду) от потери контакта электрода (когда провод «отвалился» и в файл пишется шум), алгоритм анализирует два показателя в момент критического удлинения интервала между сокращениями:
+
+1.  Длительность текущего интервала \(RR_{i}\): Время в миллисекундах между текущим и предыдущим R-пиками.
+2.  Дисперсия / Энергия сигнала внутри паузы: Изменение амплитуды сигнала в микровольтах (мкВ) на участке между этими пиками.
+
+1\. Критерий обнаружения Паузы
+
+-   Условие: Текущий интервал между R-пиками \(RR_i \ge 2000 \text{ мс}\) (или значение, заданное врачом в настройках, например, 1750 мс).
+
+2\. Критерий дифференциации (Блокада vs Шум)
+
+Алгоритм берет отрезок «чистой» паузы --- временное окно внутри интервала \(RR_{i}\) (отступив по 200 мс от краев, чтобы исключить влияние Т-зубца предыдущего сокращения и P-зубца следующего). Внутри этого окна вычисляется среднеквадратичное отклонение (RMS / Скользящая дисперсия) амплитуды сигнала:
+
+-   Реальная Пауза (Асистолия / Блокада):
+    -   Сигнал «замирает». Амплитуда стабильна и колеблется строго около изолинии.
+    -   Условие: \(RMS \le Threshold_{noise}\) (как правило, среднеквадратичное отклонение значений амплитуды в окне не превышает 20--30 мкВ).
+-   Технический артефакт (Отошел электрод / Шум):
+    -   Физически при потере контакта провод начинает ловить мощные сетевые наводки 50 Гц или хаотичные скачки от трения о статическую одежду. В файле вместо тишины появляются огромные числа.
+    -   Условие: \(RMS > Threshold_{noise}\) (амплитуда хаотично прыгает, среднеквадратичное отклонение значительно превышает 30 мкВ, уходя в сотни или тысячи единиц).
+
+* * * * *
+
+ЧАСТЬ 2. Техническое задание (ТЗ) для разработчика
+
+Тема: Разработка программного модуля детекции клинических пауз и фильтрации технических артефактов на C++
+
+1\. Входные данные
+
+-   Массив значений амплитуд ЭКГ: `const std::vector<double>& rawSignal`.
+-   Массив ранее обнаруженных R-пиков: `const std::vector<RPeak>& peaks`.
+-   Настройки детекции (пороговые значения): `double minPauseDurationMs = 2000.0`, `double noiseThresholdMcv = 30.0`.
+
+2\. Требования к логике и математике
+
+1.  Поиск кандидатов: Итерироваться по массиву `peaks`. Если разница `peaks[i].timestampMs - peaks[i-1].timestampMs >= minPauseDurationMs`, инициировать процедуру валидации паузы.
+2.  Выделение окна анализа: Рассчитать индексы начала (`start_idx`) и конца (`end_idx`) физического массива `rawSignal` для интервала между пиками, сделав защитный отступ в 200 мс от краев.
+3.  Расчет стабильности изолинии: Вычислить среднее значение (математическое ожидание) и среднеквадратичное отклонение (RMS) сигнала на данном участке.
+4.  Маркировка:
+    -   Если RMS ниже порога --- записать событие в лог пауз с указанием точной длительности.
+    -   Если RMS выше порога --- проигнорировать паузу, пометить данный участок и граничащие пики флагом `BeatType::Artifact` (Шум).
+
+* * * * *
+
+ЧАСТЬ 3. Реализация на C++
+
+Добавьте данные структуры и методы в разработанный ранее класс `HeartAnalyzer`.
+
+Изменения в заголовочный файл (`HeartAnalyzer.h`)
+
+cpp
+
+```
+#pragma once
+#include <vector>
+#include <string>
+
+// Добавляем структуру для фиксации подтвержденных пауз
+struct DetectedPause {
+    double startTimeMs; // Время начала паузы
+    double durationMs;  // Длительность в мс
+    size_t startPeakIdx;// Индекс R-пика, с которого началась пауза
+    bool isTrueBlock;   // true --- блокада/асистолия, false --- технический шум
+};
+
+// Расширяем отчет Холтера
+struct HolterReport {
+    size_t totalBeats = 0;
+    size_t singleVE = 0;
+    size_t pairVE = 0;
+    size_t vtRuns = 0;
+    size_t singleSVE = 0;
+    size_t pairSVE = 0;
+
+    // Новые поля для пауз
+    size_t totalTruePauses = 0; // Всего реальных клинических пауз
+    double maxPauseDurationMs = 0.0; // Самая длинная пауза в мс
+    size_t totalNoiseDropouts = 0; // Сколько раз отходил электрод (артефакты)
+};
+
+class HeartAnalyzer {
+private:
+    int samplingRate;
+    double msPerSample;
+
+public:
+    HeartAnalyzer(int fs) : samplingRate(fs), msPerSample(1000.0 / fs) {}
+
+    // Метод анализа пауз и фильтрации шума
+    std::vector<DetectedPause> analyzePauses(const std::vector<double>& rawSignal,
+                                             std::vector<RPeak>& peaks,
+                                             double minPauseMs = 2000.0,
+                                             double noiseThresholdMcv = 30.0);
+};
+
+```
+
+Используйте код с осторожностью.
+
+Реализация метода детекции пауз (`HeartAnalyzer.cpp`)
+
+cpp
+
+```
+#include "HeartAnalyzer.h"
+#include <cmath>
+#include <numeric>
+#include <algorithm>
+
+std::vector<DetectedPause> HeartAnalyzer::analyzePauses(const std::vector<double>& rawSignal,
+                                                       std::vector<RPeak>& peaks,
+                                                       double minPauseMs,
+                                                       double noiseThresholdMcv)
+{
+    std::vector<DetectedPause> foundPauses;
+    if (peaks.size() < 2) return foundPauses;
+
+    // Переводим временной отступ (200 мс) в количество отсчетов (строк в файле)
+    int edgeOffsetSamples = static_cast<int>(200.0 / msPerSample);
+
+    for (size_t i = 1; i < peaks.size(); ++i) {
+        double durationMs = peaks[i].timestampMs - peaks[i - 1].timestampMs;
+
+        // Порог 1: Обнаружена задержка сигнала более чем на N миллисекунд (например, 2000 мс)
+        if (durationMs >= minPauseMs) {
+
+            // Определяем физические границы участка внутри массива чисел (строк TXT)
+            size_t startIdx = peaks[i - 1].index + edgeOffsetSamples;
+            size_t endIdx = peaks[i].index - edgeOffsetSamples;
+
+            // Защита от выхода за границы массива или слишком короткого окна анализа
+            if (startIdx >= endIdx || endIdx >= rawSignal.size()) {
+                continue;
+            }
+
+            // Порог 2: Расчет RMS (энергии шума) внутри окна паузы
+            double sum = 0.0;
+            double sumSq = 0.0;
+            size_t n = endIdx - startIdx;
+
+            for (size_t k = startIdx; k < endIdx; ++k) {
+                sum += rawSignal[k];
+                sumSq += rawSignal[k] * rawSignal[k];
+            }
+
+            double mean = sum / n;
+            // Вычисляем дисперсию (стандартное квадратичное отклонение сигнала от изолинии)
+            double variance = (sumSq / n) - (mean * mean);
+            double rms = (variance > 0.0) ? std::sqrt(variance) : 0.0;
+
+            DetectedPause pauseEvent;
+            pauseEvent.startTimeMs = peaks[i - 1].timestampMs;
+            pauseEvent.durationMs = durationMs;
+            pauseEvent.startPeakIdx = i - 1;
+
+            if (rms <= noiseThresholdMcv) {
+                // Шум минимален (сигнал ровный) -> Это реальная патологическая пауза
+                pauseEvent.isTrueBlock = true;
+                foundPauses.push_back(pauseEvent);
+            }
+            else {
+                // Сигнал сильно колеблется (электрод отошел) -> Это технический артефакт
+                pauseEvent.isTrueBlock = false;
+                foundPauses.push_back(pauseEvent);
+
+                // Маркируем смежные пики как недостоверные (артефакты), чтобы они не портили общую статистику
+                peaks[i - 1].type = BeatType::Artifact;
+                peaks[i].type = BeatType::Artifact;
+            }
+        }
+    }
+
+    return foundPauses;
+}
+
+```
+
+Используйте код с осторожностью.
+
+Пример агрегации данных для финального отчета
+
+Вы можете вызвать этот метод перед генерацией отчета и обновить статистические счетчики МИС:
+
+cpp
+
+```
+// Внутри вашей функции формирования HolterReport:
+std::vector<DetectedPause> pauses = analyzer.analyzePauses(rawSignal, detectedPeaks);
+HolterReport report;
+
+for (const auto& p : pauses) {
+    if (p.isTrueBlock) {
+        report.totalTruePauses++;
+        if (p.durationMs > report.maxPauseDurationMs) {
+            report.maxPauseDurationMs = p.durationMs; // Ищем максимальную остановку ритма
+        }
+    } else {
+        report.totalNoiseDropouts++; // Фиксируем сбои «железа»/контакта
+    }
+}
+
+```
+
+Используйте код с осторожностью.
+
+Преимущества этого решения:
+
+-   Защита от ложных срабатываний: Введение `edgeOffsetSamples` гарантирует, что высокие Т-зубцы (завершение сокращения) не попадут в окно анализа изолинии и алгоритм не примет их за высокочастотный технический шум.
+-   Поиск истинной причины: Врачу в интерфейсе программы будут выводиться только подтвержденные `isTrueBlock = true` паузы, избавляя его от необходимости просматривать сотни ложных тревог, вызванных тем, что пациент задел рукой датчик.
+
+Вот математическое правило, техническое задание (ТЗ) и архитектура на C++ (стандарт C++17) для модуля автоматического сопоставления текстового дневника пациента с цифровым массивом ЭКГ.
+
+* * * * *
+
+ЧАСТЬ 1. Математическое правило (Алгоритм)
+
+Чтобы компьютер смог сопоставить текстовую жалобу с числовым массивом, событие из дневника преобразуется во временную метку (Timestamp). Алгоритм анализирует скользящее окно данных вокруг этой метки.
+
+1\. Определение окна анализа (Target Window)
+
+Поскольку пациент может записать время в дневник неточно (округлить), алгоритм строит симметричное окно вокруг указанного времени:
+
+-   Интервал анализа: \([T_{diary} - 2 \text{ мин}; T_{diary} + 2 \text{ мин}]\) (итого 4 минуты записи).
+
+2\. Математические маркеры дифференциации патологии от нормы
+
+-   Вариант А: Синусовая тахикардия (Эмоции / Нормальная реакция)
+    1.  Регулярность ритма: Коэффициент вариации интервалов \(RR\) внутри окна \(CV_{RR} < 0.1\) (ритм ровный, интервалы между ударами одинаковые).
+    2.  Наличие зубца P: Алгоритм подтверждает наличие стабильного синусового зубца P (по правилу корреляции формы, описанному ранее).
+    3.  Частота: Средняя ЧСС внутри окна превышает 90 уд/мин.
+    4.  Итог: Корреляция жалобы с физиологической нормой.
+-   Вариант Б: Пароксизм фибрилляции предсердий (Мерцательная аритмия / Опасность)
+    1.  Хаос в ритме (Абсолютная нерегулярность): Коэффициент вариации \(CV_{RR} \ge 0.2\). Расстояния между соседними R-пиками хаотично меняются от удара к удару (R-R интервалы абсолютно случайны).
+    2.  Отсутствие зубца P: Алгоритм фиксирует полное разрушение или отсутствие изолированного зубца P во всем 4-минутном окне. Вместо него наблюдаются хаотичные низкоамплитудные волны `f`.
+    3.  Итог: Опасное отклонение. Критический триггер для врача.
+
+* * * * *
+
+ЧАСТЬ 2. Техническое задание (ТЗ) для разработчика
+
+Тема: Разработка модуля автоматического сопоставления жалоб из дневника пациента с числовыми данными Холтера
+
+1\. Входные данные
+
+-   Структурированная запись из дневника: `DiaryEntry` (содержит точное время `time_t` и текст жалобы).
+-   Массив классифицированных R-пиков: `const std::vector<RPeak>& peaks`.
+-   Функция перевода абсолютного времени суток в миллисекунды от начала записи Холтера.
+
+2\. Требования к логике алгоритма
+
+1.  Поиск пиков в окне: Найти подмножество пиков `vector<RPeak>`, чьи метки `timestampMs` попадают в интервал \([T_{diary} - 120000 \text{ мс}; T_{diary} + 120000 \text{ мс}]\).
+2.  Расчет вариабельности (Хаоса): Вычислить среднее значение \(RR\) и стандартное отклонение (SDNN) для пиков в окне. Рассчитать коэффициент вариации: `CV = SDNN / Mean_RR`.
+3.  Анализ синусовости: Проверить процент пиков в окне, имеющих признак отсутствия зубца P или деформации.
+4.  Формирование автоматического сопоставления:
+    -   Если `CV >= 0.2` и зубцы P отсутствуют -> Добавить к записи дневника статус `Критическое отклонение: Пароксизм ФП`.
+    -   Если `CV < 0.1` и ЧСС > 90 -> Добавить статус `Физиологический ответ: Синусовая тахикардия`.
+
+* * * * *
+
+ЧАСТЬ 3. Реализация на C++
+
+Добавьте этот модуль в архитектуру вашей системы анализа.
+
+Заголовочный файл (`DiaryMatcher.h`)
+
+cpp
+
+```
+#pragma once
+#include <vector>
+#include <string>
+#include "HeartAnalyzer.h" // Использует типы BeatType и RPeak из предыдущих ТЗ
+
+// Структура записи из дневника пациента
+struct DiaryEntry {
+    double relativeTimeMs; // Время жалобы в мс от старта записи Холтера
+    std::string textAction; // Что написал пациент (например, "чувствовал сердцебиение")
+};
+
+// Результат автоматического сопоставления для врача
+struct MatchResult {
+    DiaryEntry diaryInfo;
+    double averageHeartRate; // ЧСС в момент жалобы
+    std::string autoConclusion; // Автоматический вывод алгоритма
+    bool isDangerous;        // Флаг опасности (требует срочного внимания врача)
+};
+
+class DiaryMatcher {
+public:
+    // Метод сопоставления дневника с ЭКГ-сигналом
+    MatchResult correlateEntry(const DiaryEntry& entry, const std::vector<RPeak>& peaks) {
+        MatchResult result;
+        result.diaryInfo = entry;
+        result.isDangerous = false;
+
+        // 1. Выделяем временное окно: +- 2 минуты (120 000 мс) вокруг жалобы
+        double startTime = entry.relativeTimeMs - 120000.0;
+        double endTime = entry.relativeTimeMs + 120000.0;
+
+        std::vector<double> windowRRIntervals;
+        size_t beatsInWindow = 0;
+
+        for (size_t i = 1; i < peaks.size(); ++i) {
+            if (peaks[i].timestampMs >= startTime && peaks[i].timestampMs <= endTime) {
+                // Исключаем артефакты (шум) из расчета ритма
+                if (peaks[i].type != BeatType::Artifact) {
+                    double rr = peaks[i].timestampMs - peaks[i - 1].timestampMs;
+                    windowRRIntervals.push_back(rr);
+                    beatsInWindow++;
+                }
+            }
+        }
+
+        // Если данных в этом окне нет (например, сплошной шум)
+        if (windowRRIntervals.empty() || beatsInWindow < 10) {
+            result.averageHeartRate = 0;
+            result.autoConclusion = "Недостаточно достоверных данных (высокий уровень шума)";
+            return result;
+        }
+
+        // 2. Расчет математического ожидания (Mean RR) и ЧСС
+        double sumRR = std::accumulate(windowRRIntervals.begin(), windowRRIntervals.end(), 0.0);
+        double meanRR = sumRR / windowRRIntervals.size();
+        result.averageHeartRate = 60000.0 / meanRR; // Перевод интервала в ЧСС (уд/мин)
+
+        // 3. Расчет среднеквадратичного отклонения (SDNN для окна)
+        double accumSq = 0.0;
+        for (double rr : windowRRIntervals) {
+            accumSq += (rr - meanRR) * (rr - meanRR);
+        }
+        double sdnn = std::sqrt(accumSq / windowRRIntervals.size());
+
+        // 4. Вычисление коэффициента вариации (мера хаотичности ритма)
+        double coeffOfVariation = sdnn / meanRR;
+
+        // 5. Логика принятия решений (Классификация состояния)
+        if (coeffOfVariation >= 0.20) {
+            // Ритм абсолютно хаотичен --- признак Фибрилляции Предсердий (Мерцательной аритмии)
+            result.autoConclusion = "Пароксизм фибрилляции предсердий (аритмия)! Требуется верификация врача.";
+            result.isDangerous = true;
+        }
+        else if (result.averageHeartRate > 95.0 && coeffOfVariation < 0.10) {
+            // Пульс высокий, но ритм идеально ровный --- синусовая тахикардия
+            result.autoConclusion = "Синусовая тахикардия. Ритм регулярный. Вероятна эмоциональная/физ. нагрузка.";
+            result.isDangerous = false;
+        }
+        else if (result.averageHeartRate > 95.0) {
+            result.autoConclusion = "Тахикардия с умеренной нерегулярностью ритма.";
+            result.isDangerous = false;
+        }
+        else {
+            result.autoConclusion = "Значимых изменений ритма и ЧСС в указанное время не обнаружено.";
+            result.isDangerous = false;
+        }
+
+        return result;
+    }
+};
+
+```
+
+Используйте код с осторожностью.
+
+Как это экономит время врача в интерфейсе программы:
+
+-   Модуль пробегается по всему JSON/массиву дневника пациента за 1 миллисекунду.
+-   Записи, где `isDangerous == true`, подсвечиваются в интерфейсе ярким красным цветом.
+-   Вместо ручной прокрутки 24-часовой ленты врач просто кликает на красную строчку в таблице дневника, и интерфейс МИС мгновенно перематывает график ЭКГ на нужные «21:30», показывая проблемный участок.
+
+## Логика для парсинга текстового времени (строки вида "21:30") и перевода её в миллисекунды relativeTimeMs относительно времени запуска регистратора Холтера
+
+Вот математическое правило, техническое задание и готовая реализация на C++ (стандарт C++17) для модуля парсинга времени и перевода его в относительные миллисекунды от начала записи Холтера.
+
+* * * * *
+
+ЧАСТЬ 1. Математическое правило (Алгоритм)
+
+Основная сложность перевода времени из дневника пациента заключается в том, что запись холтера часто переходит через полуночный рубеж (00:00). Если прибор включили в 14:00, а пациент сделал запись в 02:00 ночи, простое вычитание времени выдаст отрицательный результат. Математика алгоритма должна учитывать этот переход.
+
+1\. Перевод времени в «абсолютные секунды суток»
+
+Любое время формата `ЧЧ:ММ` (или `ЧЧ:ММ:СС`) переводится в количество секунд, прошедших с начала текущих суток (с 00:00:00):\
+\(\text{SecondsOfDay}=(\text{Hours}\times 3600)+(\text{Minutes}\times 60)+\text{Seconds}\)
+
+2\. Расчет относительного смещения с учетом перехода через полночь
+
+Пусть \(S_{start}\) --- секунды суток начала записи Холтера, а \(S_{diary}\) --- секунды суток записи в дневнике.
+
+-   Случай 1 (В пределах одних суток): Если \(S_{diary} \ge S_{start}\), то разница составляет:\
+    \(\Delta S=S_{diary}-S_{start}\)
+-   Случай 2 (Переход через полночь): Если \(S_{diary} < S_{start}\) (например, старт в 23:00, запись в 01:00), это значит, что наступили следующие сутки. К времени дневника необходимо прибавить полные сутки (86400 секунд):\
+    \(\Delta S=(S_{diary}+86400)-S_{start}\)
+
+* * * * *
+
+ЧАСТЬ 2. Техническое задание (ТЗ) для разработчика
+
+Тема: Разработка строкового парсера времени суток для синхронизации дневника пациентов с сигналами Холтера
+
+1\. Входные данные
+
+-   Строка с абсолютным временем старта Холтера: `"14:20:00"` (из заголовка файла EDF/TXT).
+-   Строка с временем события из дневника: `"21:35"` или `"21:35:15"`.
+-   Оба параметра могут иметь форматы как `ЧЧ:ММ`, так и `ЧЧ:ММ:СС`.
+
+2\. Требования к парсеру и логике
+
+1.  Валидация строки: Использовать регулярные выражения (`std::regex`) для проверки корректности формата времени и защиты от некорректного ввода (например, букв или значений часов > 23, минут > 59).
+2.  Токенизация: Разбить строку по разделителю `:` на часы, минуты и секунды (если секунды не указаны, принимать их равными `0`).
+3.  Расчет миллисекунд: На основе математического правила перехода через полночь рассчитать итоговое смещение в миллисекундах (`double` или `int64_t`), которое можно напрямую использовать для позиционирования в массиве сигналов ЭКГ.
+
+* * * * *
+
+ЧАСТЬ 3. Реализация на C++
+
+Заголовочный файл (`TimeParser.h`)
+
+cpp
+
+```
+#pragma once
+#include <string>
+#include <regex>
+#include <stdexcept>
+
+class TimeParser {
+private:
+    // Метод перевода строки "ЧЧ:ММ:СС" или "ЧЧ:ММ" в секунды суток
+    long long timeToSecondsOfDay(const std::string& timeStr) {
+        // Регулярное выражение поддерживает форматы ЧЧ:ММ и ЧЧ:ММ:СС
+        std::regex timeRegex(R"(^([0-1]?[0-9]|2[0-3]):([0-5][0-9])(?::([0-5][0-9]))?$)");
+        std::smatch match;
+
+        if (!std::regex_match(timeStr, match, timeRegex)) {
+            throw std::invalid_argument("Неверный формат времени: " + timeStr);
+        }
+
+        long long hours = std::stoll(match[1].str());
+        long long minutes = std::stoll(match[2].str());
+        long long seconds = match[3].matched ? std::stoll(match[3].str()) : 0;
+
+        return (hours * 3600) + (minutes * 60) + seconds;
+    }
+
+public:
+    // Основной метод расчета относительного смещения в миллисекундах
+    double calculateRelativeMs(const std::string& holterStartTimeStr, const std::string& diaryTimeStr) {
+        long long startSeconds = timeToSecondsOfDay(holterStartTimeStr);
+        long long diarySeconds = timeToSecondsOfDay(diaryTimeStr);
+
+        long long diffSeconds = 0;
+
+        if (diarySeconds >= startSeconds) {
+            // Событие произошло в те же сутки, что и старт записи
+            diffSeconds = diarySeconds - startSeconds;
+        } else {
+            // Произошел переход через полночь (добавляем 24 часа в секундах)
+            diffSeconds = (diarySeconds + 86400) - startSeconds;
+        }
+
+        // Переводим секунды в миллисекунды для работы с индексами сигналов ЭКГ
+        return static_cast<double>(diffSeconds * 1000);
+    }
+};
+
+```
+
+Используйте код с осторожностью.
+
+Пример интеграции в общую систему (`main.cpp`):
+
+cpp
+
+```
+#include <iostream>
+#include "TimeParser.h"
+#include "DiaryMatcher.h" // Подключаем разработанный ранее модуль сопоставления
+
+int main() {
+    TimeParser parser;
+    DiaryMatcher matcher;
+
+    // 1. Данные из заголовка файла прибора (Валента / Медиком)
+    std::string holterStart = "23:15:00"; // Прибор включили поздно вечером
+
+    // 2. Две записи из бумажного дневника пациента
+    std::string diaryTime1 = "23:45";    // Пациент лег спать (в те же сутки)
+    std::string diaryTime2 = "01:20:15"; // Ночной приступ (уже следующие сутки)
+
+    try {
+        // Вычисляем относительные миллисекунды от начала записи
+        double relativeMs1 = parser.calculateRelativeMs(holterStart, diaryTime1);
+        double relativeMs2 = parser.calculateRelativeMs(holterStart, diaryTime2);
+
+        std::cout << "Время старта прибора: " << holterStart << "\n\n";
+
+        std::cout << "Запись в дневнике: " << diaryTime1 << "\n";
+        std::cout << "Смещение в миллисекундах: " << relativeMs1 << " мс (" << (relativeMs1 / 1000 / 60) << " мин от старта)\n\n";
+
+        std::cout << "Запись в дневнике (после полуночи): " << diaryTime2 << "\n";
+        std::cout << "Смещение в миллисекундах: " << relativeMs2 << " мс (" << (relativeMs2 / 1000 / 60) << " мин от старта)\n\n";
+
+        // 3. Формируем структуру для нашего аналитического модуля
+        DiaryEntry entry;
+        entry.relativeTimeMs = relativeMs2;
+        entry.textAction = "Проснулся от сильного сердцебиения";
+
+        // Далее передаем 'entry' в метод matcher.correlateEntry(entry, detectedPeaks)
+        // как это было описано в предыдущем ТЗ.
+
+    } catch (const std::exception& e) {
+        std::cerr << "Ошибка парсинга: " << e.what() << std::endl;
+    }
+
+    return 0;
+}
+
+```
+
+Используйте код с осторожностью.
+
+Архитектурные нюансы:
+
+-   Защита от сбоев (`try-catch`): Если медсестра при вводе дневника случайно опечатается и введет некорректные символы (например, `"25:71"`), регулярное выражение мгновенно выбросит исключение `std::invalid_argument`. Это защитит математические модули от обработки некорректных данных и предотвратит падение всей программы МИС.
+-   Масштабируемость: Если в будущем запись холтера будет длиться не 24 часа, а 3 или 7 суток (продолжительный мониторинг), данную логику потребуется расширить, передавая парсеру также и календарную дату (`ДД.ММ.ГГГГ`), используя тип данных `std::chrono::system_clock`.
+
+## Финальный объединяющий класс-контроллер, который управляет всей этой цепочкой обработки данных
+
+Вот архитектура и реализация финального класса-контроллера на C++ (стандарт C++17). Этот класс объединяет все разработанные ранее модули (парсер времени, детектор пауз, классификатор экстрасистол и коррелятор дневника) в единый конвейер (pipeline) обработки данных.
+
+Архитектурное решение (`HolterPipelineController.h`)
+
+Класс-контроллер принимает на вход сырые данные, координирует вызовы математических модулей и возвращает единую структурированную модель исследования, готовую для сохранения в МИС или отображения врачу.
+
+cpp
+
+```
+#pragma once
+#include <vector>
+#include <string>
+#include <memory>
+#include "HeartAnalyzer.h"
+#include "DiaryMatcher.h"
+#include "TimeParser.h"
+
+// Финальная комплексная модель данных исследования Холтера
+struct CompleteHolterAnalysis {
+    HolterReport statistics;                     // Общая статистика (ЧСС, экстрасистолы)
+    std::vector<RPeak> classifiedPeaks;          // Полный массив размеченных ударов сердца
+    std::vector<DetectedPause> clinicalPauses;   // Список подтвержденных истинных пауз
+    std::vector<MatchResult> diaryCorrelations;  // Результаты автоматического анализа дневника
+};
+
+class HolterPipelineController {
+private:
+    std::unique_ptr<HeartAnalyzer> analyzer;
+    std::unique_ptr<DiaryMatcher> matcher;
+    std::unique_ptr<TimeParser> parser;
+
+    int samplingRate;
+    std::string holterStartTime;
+
+public:
+    // Конструктор инициализирует все необходимые подмодули
+    HolterPipelineController(int fs, const std::string& startTime)
+        : samplingRate(fs), holterStartTime(startTime)
+    {
+        analyzer = std::make_unique<HeartAnalyzer>(fs);
+        matcher = std::make_unique<DiaryMatcher>();
+        parser = std::make_unique<TimeParser>();
+    }
+
+    /**
+     * Главная функция конвейера обработки данных
+     * @param rawSignal - Вектор чисел амплитуд ЭКГ (извлеченный из TXT/EDF файла)
+     * @param detectedRPeaks - Массив координат пиков R (индексы строк), найденный первичным R-детектором
+     * @param rawDiary - Сырой список записей дневника пациента (время в строковом формате)
+     */
+    CompleteHolterAnalysis runFullAnalysis(
+        const std::vector<double>& rawSignal,
+        std::vector<RPeak>& detectedRPeaks,
+        const std::vector<std::pair<std::string, std::string>>& rawDiary)
+    {
+        CompleteHolterAnalysis finalResult;
+
+        if (detectedRPeaks.empty()) return finalResult;
+
+        // ШАГ 1: Экспертная разметка экстрасистол (Морфологический анализ)
+        // В качестве эталона нормы передаем первый комплекс
+        RPeak normalTemplate = detectedRPeaks[0];
+        analyzer->classifyBeats(rawSignal, detectedRPeaks, normalTemplate);
+
+        // ШАГ 2: Детекция клинических пауз и фильтрация технических сбоев/отклеивания
+        finalResult.clinicalPauses = analyzer->analyzePauses(rawSignal, detectedRPeaks);
+
+        // ШАГ 3: Генерация базовой статистической отчетности
+        finalResult.statistics = analyzer->generateReport(detectedRPeaks);
+
+        // Дозаполняем статистику пауз в отчет
+        for (const auto& p : finalResult.clinicalPauses) {
+            if (p.isTrueBlock) {
+                finalResult.statistics.totalTruePauses++;
+                if (p.durationMs > finalResult.statistics.maxPauseDurationMs) {
+                    finalResult.statistics.maxPauseDurationMs = p.durationMs;
+                }
+            } else {
+                finalResult.statistics.totalNoiseDropouts++;
+            }
+        }
+
+        // ШАГ 4: Парсинг времени дневника и автоматическое сопоставление с ЭКГ
+        for (const auto& diaryItem : rawDiary) {
+            try {
+                std::string timeStr = diaryItem.first;
+                std::string actionStr = diaryItem.second;
+
+                // Переводим "ЧЧ:ММ" в относительные миллисекунды от старта записи
+                double relMs = parser->calculateRelativeMs(holterStartTime, timeStr);
+
+                DiaryEntry entry;
+                entry.relativeTimeMs = relMs;
+                entry.textAction = actionStr;
+
+                // Запускаем математический коррелятор ритма в момент жалобы
+                MatchResult match = matcher->correlateEntry(entry, detectedRPeaks);
+                finalResult.diaryCorrelations.push_back(match);
+            }
+            catch (const std::exception& e) {
+                // Если одна запись дневника повреждена, логируем ошибку и продолжаем конвейер
+                MatchResult errorMatch;
+                errorMatch.diaryInfo.textAction = diaryItem.second;
+                errorMatch.autoConclusion = "Ошибка парсинга времени: " + std::string(e.what());
+                errorMatch.isDangerous = false;
+                finalResult.diaryCorrelations.push_back(errorMatch);
+            }
+        }
+
+        // Сохраняем размеченный массив пиков в итоговую структуру
+        finalResult.classifiedPeaks = detectedRPeaks;
+
+        return finalResult;
+    }
+};
+
+```
+
+Используйте код с осторожностью.
+
+Демонстрация работы всей системы (`main.cpp`)
+
+Ниже представлен пример того, как верхнеуровневый код МИС взаимодействует с контроллером для мгновенной обработки суточного исследования:
+
+cpp
+
+```
+#include <iostream>
+#include "HolterPipelineController.h"
+
+int main() {
+    // 1. Конфигурация сессии исследования (данные из заголовка файла)
+    int samplingRate = 250;
+    std::string startTime = "08:00:00"; // Холтер запущен в 8 утра
+
+    // Инициализируем управляющий контроллер
+    HolterPipelineController controller(samplingRate, startTime);
+
+    // 2. Имитация входных сигналов (Заполняется парсером EDF/TXT файла)
+    std::vector<double> rawSignal(1000000, 10.0); // Миллион точек амплитуд ЭКГ
+
+    // Имитация пиков, найденных R-детектором
+    std::vector<RPeak> rPeaks = {
+        { 500,   2000.0, 1200.0, 80.0 },  // 2-я секунда записи (Норма)
+        { 1000,  4000.0, 1150.0, 82.0 },  // 4-я секунда записи (Норма)
+        { 1150,  4600.0, 900.0,  145.0 }, // Преждевременный широкий удар -> Желудочковая экстрасистола
+        { 2000,  8000.0, 1200.0, 80.0 }   // Пауза 3.4 секунды между пиками (Клиническая пауза)
+    };
+
+    // 3. Имитация ввода бумажного дневника медсестрой
+    std::vector<std::pair<std::string, std::string>> patientDiary = {
+        { "08:00:04", "Почувствовал сильный толчок в груди (экстрасистола)" },
+        { "08:00:07", "Закружилась голова (момент паузы ритма)" },
+        { "25:00",    "Опечатка оператора для проверки устойчивости кода" }
+    };
+
+    std::cout << ">>> Запуск автоматического конвейера анализа Холтера...\n\n";
+
+    // Исполнение всего пайплайна одной строкой кода
+    CompleteHolterAnalysis analysisResult = controller.runFullAnalysis(rawSignal, rPeaks, patientDiary);
+
+    // 4. Вывод агрегированных результатов работы алгоритмов
+    std::cout << "=== СТАТИСТИКА ИССЛЕДОВАНИЯ ===\n";
+    std::cout << "Обработано ударов сердца: " << analysisResult.statistics.totalBeats << "\n";
+    std::cout << "Выявлено желудочковых экстрасистол (V): " << analysisResult.statistics.singleVE << "\n";
+    std::cout << "Выявлено истинных клинических пауз: " << analysisResult.statistics.totalTruePauses << "\n";
+    std::cout << "Зафиксировано технических сбоев кабеля: " << analysisResult.statistics.totalNoiseDropouts << "\n\n";
+
+    std::cout << "=== РЕЗУЛЬТАТЫ СИНХРОНИЗАЦИИ ДНЕВНИКА ===\n";
+    for (const auto& match : analysisResult.diaryCorrelations) {
+        std::cout << "- Жалоба: \"" << match.diaryInfo.textAction << "\"\n";
+        std::cout << "  ЧСС в этот момент: " << match.averageHeartRate << " уд/мин\n";
+        std::cout << "  Авто-заключение системы: " << match.autoConclusion << "\n";
+        if (match.isDangerous) {
+            std::cout << "  [!] ВНИМАНИЕ: Данный участок требует приоритетного внимания врача!\n";
+        }
+        std::cout << "--------------------------------------------------\n";
+    }
+
+    return 0;
+}
+
+```
+
+Используйте код с осторожностью.
+
+Преимущества архитектуры контроллера:
+
+1.  Изоляция модулей (Low Coupling): Математика детекции аритмий ничего не знает о том, как устроен строковый парсер дневника. Вы можете полностью переписать внутренности класса `TimeParser` (например, перевести его на `std::chrono`), не меняя код контроллера и логику анализа сигналов.
+2.  Безопасность памяти: Использование умных указателей `std::unique_ptr` гарантирует автоматическое освобождение памяти, выделенной под тяжелые аналитические модули, сразу после уничтожения объекта контроллера, исключая утечки (memory leaks).
+3.  Устойчивость к ошибкам (Fault Tolerance): Блок `try-catch` внутри цикла обработки дневника гарантирует, что человеческий фактор (опечатка в текстовом файле дневника) не прервет анализ кардиосигнала и врач гарантированно получит общую статистику по холтеру.
