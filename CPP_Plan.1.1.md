@@ -39,6 +39,90 @@
 
 Вот как формулируется математическое правило нормы (поиска синусового ритма) для текстового массива чисел ЭКГ:
 
+Примеры открытого кода на C++ для чтения ЭКГ
+
+В open-source среде чаще всего работают с европейским форматом EDF (European Data Format) и форматом MIT-BIH (WFDB), так как они стандартизированы.
+
+Пример А: Чтение заголовка EDF файла (C-style / C++)
+
+Формат EDF хранит текстовый заголовок в начале файла. Вот базовый пример, как прочитать метаданные (ФИО, дату, частоту дискретизации):
+
+cpp
+
+```
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <string>
+
+struct EdfHeader {
+    char version[8];
+    char patient_id[80];
+    char record_id[80];
+    char start_date[8];
+    char start_time[8];
+    char header_bytes[8];
+    // Далее идут данные по каждому каналу (ЭКГ-отведению)
+};
+
+int main() {
+    std::ifstream file("signal.edf", std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Ошибка открытия файла!" << std::endl;
+        return 1;
+    }
+
+    EdfHeader header;
+    file.read(reinterpret_cast<char*>(&header), sizeof(EdfHeader));
+
+    std::cout << "ID Пациента: " << std::string(header.patient_id, 80) << "\n";
+    std::cout << "Дата записи: " << std::string(header.start_date, 8) << "\n";
+
+    file.close();
+    return 0;
+}
+
+```
+
+Используйте код с осторожностью.
+
+Пример Б: Использование готовых библиотек
+
+Писать парсер бинарных сигналов с нуля долго из-за учета калибровочных коэффициентов и фильтрации. На практике используют проверенные библиотеки:
+
+1.  EDFLIB (C/C++): Легковесная библиотека для работы с EDF/EDF+.
+2.  WFDB Applications (C++): Официальный пакет от PhysioNet для работы с базой данных MIT-BIH.
+
+Пример работы с гипотетической оберткой библиотеки для чтения отсчетов:
+
+cpp
+
+```
+// Используя стандартную библиотеку edflib
+#include "edflib.h"
+
+int main() {
+    int handle = edfopen_file_readonly("patient_ecg.edf");
+    if (handle < 0) return -1;
+
+    edf_hdr_struct header;
+    edf_get_header(handle, &header);
+
+    // Выделяем буфер под 1 секунду данных (например, 250 Гц)
+    std::vector<double> buffer(250);
+
+    // Читаем первый канал (например, I отведение ЭКГ)
+    edf_read_physical_samples(handle, 0, 250, buffer.data());
+
+    // Теперь в buffer лежат реальные милливольты (mV) для построения графика
+    std::cout << "Первая точка ЭКГ: " << buffer[0] << " mV" << std::endl;
+
+    edfclose_file(handle);
+    return 0;
+}
+```
+
+
 * * * * *
 
 1\. Формат данных (что мы видим в TXT)
