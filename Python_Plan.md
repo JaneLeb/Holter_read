@@ -4,11 +4,15 @@
 
 <img width="1024" height="1024" alt="c016e49800511f1a2165e6a90fa3bb5_1" src="https://github.com/user-attachments/assets/030623f4-e13f-4800-933a-b29f81c979a8" />
 
+Как выглядит и что включает в себя экран врача - можно подробнее прочитать тут. 
+
+https://med-solutions.ru/product/funktsionalnaya-diagnostika/kholtery/cubeholter/
+
 4. Экран врача (Backend-view)
 
 
 
-Полный технологический стек для демонстрационного дня:
+Полный технологический стек:
 
 
 * Обезличенный веб-дневник пациента для сбора логов контекста и симптомов в интернете.
