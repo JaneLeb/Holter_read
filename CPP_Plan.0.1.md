@@ -106,46 +106,46 @@
 
 ## Код DPCM-декодера на C++
 
-#include <iostream>#include <vector>#include <cstdint>\
-class DpcmDecoder {public:\
-    // Декодирует вектор дельт обратно в исходный ЭКГ-сигнал\
-    static std::vector<int16_t> decode(const std::vector<int8_t>& deltas, int16_t initialValue) {\
-        std::vector<int16_t> signal;\
-        signal.reserve(deltas.size() + 1);
-
-        // Помещаем стартовую точку (базовую линию)\
-        int16_t currentValue = initialValue;\
-        signal.push_back(currentValue);
-
-        // Восстанавливаем сигнал методом кумулятивной суммы\
-        for (int8_t delta : deltas) {\
-            // В реальном медицинском софте здесь проверяют переполнение (overflow)\
-            currentValue += delta;\
-            signal.push_back(currentValue);\
-        }
-
-        return signal;\
-    }\
-};\
-int main() {\
-    // Симулируем чтение заголовка файла Холтера\
-    int16_t baseLine = 512; // Начальное положение изолинии ЭКГ
-
-    // Симулируем распакованный из битового потока массив 8-битных дельт.\
-    // Большой скачок +120 --- это симуляция острого зубца R (сокращение желудочков).\
-    std::vector<int8_t> compressedDeltas = {2, 1, -1, 3, 120, -115, -5, 1, 0, -2};
-
-    // Запуск декодирования\
-    std::vector<int16_t> restoredSignal = DpcmDecoder::decode(compressedDeltas, baseLine);
-
-    // Вывод восстановленного графика ЭКГ (значения амплитуды)\
-    std::cout << "Восстановленный график ЭКГ:\n";\
-    for (size_t i = 0; i < restoredSignal.size(); ++i) {\
-        std::cout << "Точка " << i << ": " << restoredSignal[i] << "\n";\
-    }
-
-    return 0;\
-}
+    #include <iostream>#include <vector>#include <cstdint>\
+    class DpcmDecoder {public:\
+        // Декодирует вектор дельт обратно в исходный ЭКГ-сигнал\
+        static std::vector<int16_t> decode(const std::vector<int8_t>& deltas, int16_t initialValue) {\
+            std::vector<int16_t> signal;\
+            signal.reserve(deltas.size() + 1);
+    
+            // Помещаем стартовую точку (базовую линию)\
+            int16_t currentValue = initialValue;\
+            signal.push_back(currentValue);
+    
+            // Восстанавливаем сигнал методом кумулятивной суммы\
+            for (int8_t delta : deltas) {\
+                // В реальном медицинском софте здесь проверяют переполнение (overflow)\
+                currentValue += delta;\
+                signal.push_back(currentValue);\
+            }
+    
+            return signal;\
+        }\
+    };\
+    int main() {\
+        // Симулируем чтение заголовка файла Холтера\
+        int16_t baseLine = 512; // Начальное положение изолинии ЭКГ
+    
+        // Симулируем распакованный из битового потока массив 8-битных дельт.\
+        // Большой скачок +120 --- это симуляция острого зубца R (сокращение желудочков).\
+        std::vector<int8_t> compressedDeltas = {2, 1, -1, 3, 120, -115, -5, 1, 0, -2};
+    
+        // Запуск декодирования\
+        std::vector<int16_t> restoredSignal = DpcmDecoder::decode(compressedDeltas, baseLine);
+    
+        // Вывод восстановленного графика ЭКГ (значения амплитуды)\
+        std::cout << "Восстановленный график ЭКГ:\n";\
+        for (size_t i = 0; i < restoredSignal.size(); ++i) {\
+            std::cout << "Точка " << i << ": " << restoredSignal[i] << "\n";\
+        }
+    
+        return 0;\
+    }
 
 ------------------------------\
 ## Архитектурные нюансы для парсера Холтера\
