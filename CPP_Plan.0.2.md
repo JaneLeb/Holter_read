@@ -367,83 +367,83 @@ int main() {
 Ниже представлен готовый код с тремя важнейшими тестами для медицинского софта.
 ## Код автотестов на C++
 
-#include <iostream>#include <vector>#include <cmath> // Здесь живет функция std::abs для сравнения дробных чисел#include <algorithm>
-
-
-      // Вставляем сюда нашу оптимизированную функцию фильтра из прошлого шагаstd::vector<double> medianFilterFast(const std::vector<double>& dirtySignal, int windowSize) {\
-          size_t signalSize = dirtySignal.size();\
-          std::vector<double> cleanSignal(signalSize);\
-          size_t windowLength = 2 * windowSize + 1;\
-          std::vector<double> windowBuffer(windowLength);\
-          auto medianIterator = windowBuffer.begin() + windowSize;
+      #include <iostream>#include <vector>#include <cmath> // Здесь живет функция std::abs для сравнения дробных чисел#include <algorithm>
       
-          for (size_t i = windowSize; i < signalSize - windowSize; ++i) {\
-              std::copy(dirtySignal.begin() + (i - windowSize),\
-                        dirtySignal.begin() + (i + windowSize + 1),\
-                        windowBuffer.begin());\
-              std::nth_element(windowBuffer.begin(), medianIterator, windowBuffer.end());\
-              cleanSignal[i] = dirtySignal[i] - *medianIterator;\
-          }\
-          return cleanSignal;\
-      }\
-      // Вспомогательная функция для сравнения двух векторов с плавающей точкойbool areVectorsEqual(const std::vector<double>& v1, const std::vector<double>& v2, double epsilon = 0.0001) {\
-          if (v1.size() != v2.size()) return false;\
-          for (size_t i = 2; i < v1.size() - 2; ++i) { // Проверяем только рабочую зону (без краев)\
-              if (std::abs(v1[i] - v2[i]) > epsilon) {\
-                  return false;\
-              }\
-          }\
-          return true;\
-      }\
-      // ТЕСТ 1: Проверяем, что идеальный синусовый ритм без шума фильтр вообще не трогаетvoid test_ZeroDrift_ShouldNotChangeSignal() {\
-          std::vector<double> perfectSignal = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\
-          std::vector<double> expected      = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
       
-          std::vector<double> result = medianFilterFast(perfectSignal, 2);
-      
-          if (areVectorsEqual(result, expected)) {\
-              std::cout << "[ОК] Тест 1: Идеальный сигнал не портится.\n";\
-          } else {\
-              std::cout << "[ОШИБКА] Тест 1: Фильтр изменил чистый сигнал!\n";\
-          }\
-      }\
-      // ТЕСТ 2: Проверяем, что фильтр полностью выравнивает уплывшую вверх изолиниюvoid test_ConstantDrift_ShouldBeFlattened() {\
-          // График уплыл вверх ровно на 50 единиц (0 + 50, 10 + 50...)\
-          std::vector<double> driftedSignal = {50, 60, 50, 55, 50, 60, 50};\
-          // Ожидаем, что после вычитания "горы" в 50 единиц график вернется к норме\
-          std::vector<double> expected      = { 0, 10,  0,  5,  0, 10,  0};
-      
-          std::vector<double> result = medianFilterFast(driftedSignal, 2);
-      
-          if (areVectorsEqual(result, expected)) {\
-              std::cout << "[ОК] Тест 2: Постоянный дрейф изолинии успешно удален.\n";\
-          } else {\
-              std::cout << "[ОШИБКА] Тест 2: График не выровнялся!\n";\
-          }\
-      }\
-      // ТЕСТ 3: Проверяем наше главное опасение --- не срезается ли высокий R-пикvoid test_HighRPeak_ShouldBePreserved() {\
-          // Внутри ровного графика есть огромный всплеск в 900 единиц (удар сердца)\
-          std::vector<double> signalWithPeak = {0, 0, 900, 0, 0, 0, 0};\
-          std::vector<double> expected       = {0, 0, 900, 0, 0, 0, 0};
-      
-          std::vector<double> result = medianFilterFast(signalWithPeak, 2);
-      
-          if (areVectorsEqual(result, expected)) {\
-              std::cout << "[ОК] Тест 3: Высокий R-пик не повредился фильтром.\n";\
-          } else {\
-              std::cout << "[ОШИБКА] Тест 3: Фильтр срезал или исказил удар сердца!\n";\
-          }\
-      }\
-      int main() {\
-          std::cout << "=== Запуск автотестов медианного фильтра ===\n";
-      
-          test_ZeroDrift_ShouldNotChangeSignal();\
-          test_ConstantDrift_ShouldBeFlattened();\
-          test_HighRPeak_ShouldBePreserved();
-      
-          std::cout << "============================================\n";\
-          return 0;\
-      }
+            // Вставляем сюда нашу оптимизированную функцию фильтра из прошлого шагаstd::vector<double> medianFilterFast(const std::vector<double>& dirtySignal, int windowSize) {\
+                size_t signalSize = dirtySignal.size();\
+                std::vector<double> cleanSignal(signalSize);\
+                size_t windowLength = 2 * windowSize + 1;\
+                std::vector<double> windowBuffer(windowLength);\
+                auto medianIterator = windowBuffer.begin() + windowSize;
+            
+                for (size_t i = windowSize; i < signalSize - windowSize; ++i) {\
+                    std::copy(dirtySignal.begin() + (i - windowSize),\
+                              dirtySignal.begin() + (i + windowSize + 1),\
+                              windowBuffer.begin());\
+                    std::nth_element(windowBuffer.begin(), medianIterator, windowBuffer.end());\
+                    cleanSignal[i] = dirtySignal[i] - *medianIterator;\
+                }\
+                return cleanSignal;\
+            }\
+            // Вспомогательная функция для сравнения двух векторов с плавающей точкойbool areVectorsEqual(const std::vector<double>& v1, const std::vector<double>& v2, double epsilon = 0.0001) {\
+                if (v1.size() != v2.size()) return false;\
+                for (size_t i = 2; i < v1.size() - 2; ++i) { // Проверяем только рабочую зону (без краев)\
+                    if (std::abs(v1[i] - v2[i]) > epsilon) {\
+                        return false;\
+                    }\
+                }\
+                return true;\
+            }\
+            // ТЕСТ 1: Проверяем, что идеальный синусовый ритм без шума фильтр вообще не трогаетvoid test_ZeroDrift_ShouldNotChangeSignal() {\
+                std::vector<double> perfectSignal = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\
+                std::vector<double> expected      = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+            
+                std::vector<double> result = medianFilterFast(perfectSignal, 2);
+            
+                if (areVectorsEqual(result, expected)) {\
+                    std::cout << "[ОК] Тест 1: Идеальный сигнал не портится.\n";\
+                } else {\
+                    std::cout << "[ОШИБКА] Тест 1: Фильтр изменил чистый сигнал!\n";\
+                }\
+            }\
+            // ТЕСТ 2: Проверяем, что фильтр полностью выравнивает уплывшую вверх изолиниюvoid test_ConstantDrift_ShouldBeFlattened() {\
+                // График уплыл вверх ровно на 50 единиц (0 + 50, 10 + 50...)\
+                std::vector<double> driftedSignal = {50, 60, 50, 55, 50, 60, 50};\
+                // Ожидаем, что после вычитания "горы" в 50 единиц график вернется к норме\
+                std::vector<double> expected      = { 0, 10,  0,  5,  0, 10,  0};
+            
+                std::vector<double> result = medianFilterFast(driftedSignal, 2);
+            
+                if (areVectorsEqual(result, expected)) {\
+                    std::cout << "[ОК] Тест 2: Постоянный дрейф изолинии успешно удален.\n";\
+                } else {\
+                    std::cout << "[ОШИБКА] Тест 2: График не выровнялся!\n";\
+                }\
+            }\
+            // ТЕСТ 3: Проверяем наше главное опасение --- не срезается ли высокий R-пикvoid test_HighRPeak_ShouldBePreserved() {\
+                // Внутри ровного графика есть огромный всплеск в 900 единиц (удар сердца)\
+                std::vector<double> signalWithPeak = {0, 0, 900, 0, 0, 0, 0};\
+                std::vector<double> expected       = {0, 0, 900, 0, 0, 0, 0};
+            
+                std::vector<double> result = medianFilterFast(signalWithPeak, 2);
+            
+                if (areVectorsEqual(result, expected)) {\
+                    std::cout << "[ОК] Тест 3: Высокий R-пик не повредился фильтром.\n";\
+                } else {\
+                    std::cout << "[ОШИБКА] Тест 3: Фильтр срезал или исказил удар сердца!\n";\
+                }\
+            }\
+            int main() {\
+                std::cout << "=== Запуск автотестов медианного фильтра ===\n";
+            
+                test_ZeroDrift_ShouldNotChangeSignal();\
+                test_ConstantDrift_ShouldBeFlattened();\
+                test_HighRPeak_ShouldBePreserved();
+            
+                std::cout << "============================================\n";\
+                return 0;\
+            }
 
 ------------------------------
 ## Почему это важно для стартапа?
@@ -459,51 +459,51 @@ int main() {
 Ниже представлен оптимизированный вариант, который будет работать в разы быстрее.
 ## Оптимизированный код на C++
 
-         #include <iostream>#include <vector>#include <algorithm>\
-         // Быстрый медианный фильтр без выделения памяти в циклеstd::vector<double> medianFilterFast(const std::vector<double>& dirtySignal, int windowSize) {\
-             size_t signalSize = dirtySignal.size();\
-             std::vector<double> cleanSignal(signalSize); // Выделяем память под результат один раз
-         
-             // 1. Выделяем буфер под окно ВСЕГО ОДИН РАЗ до цикла.\
-             // Размер окна: windowSize слева + 1 центр + windowSize справа\
-             size_t windowLength = 2 * windowSize + 1;\
-             std::vector<double> windowBuffer(windowLength);
-         
-             // Итератор, указывающий на центральный элемент в буфере (медиану)\
-             auto medianIterator = windowBuffer.begin() + windowSize;
-         
-             // 2. Бежим по сигналу\
-             for (size_t i = windowSize; i < signalSize - windowSize; ++i) {
-         
-                 // Вместо создания нового вектора, просто копируем данные в уже существующий буфер.\
-                 // Используем быстрый std::copy для копирования куска памяти.\
-                 std::copy(dirtySignal.begin() + (i - windowSize),\
-                           dirtySignal.begin() + (i + windowSize + 1),\
-                           windowBuffer.begin());
-         
-                 // Находим медиану. std::nth_element работает прямо внутри нашего постоянного буфера.\
-                 std::nth_element(windowBuffer.begin(), medianIterator, windowBuffer.end());
-         
-                 // Вычитаем найденную линию шума из грязного сигнала прямо на лету\
-                 cleanSignal[i] = dirtySignal[i] - *medianIterator;\
-             }
-         
-             return cleanSignal;\
-         }\
-         int main() {\
-             // Тестовый сигнал\
-             std::vector<double> dirtySignal = {0, 0, 500, 0, 0, 10, 12, 500, 15, 14, 0, 0};
-         
-             // Запускаем быстрый фильтр\
-             std::vector<double> cleanSignal = medianFilterFast(dirtySignal, 2);
-         
-             std::cout << "Очищенный сигнал (быстрый алгоритм):\n";\
-             for (size_t i = 2; i < cleanSignal.size() - 2; ++i) {\
-                 std::cout << cleanSignal[i] << "\n";\
-             }
-         
-             return 0;\
-         }
+               #include <iostream>#include <vector>#include <algorithm>\
+               // Быстрый медианный фильтр без выделения памяти в циклеstd::vector<double> medianFilterFast(const std::vector<double>& dirtySignal, int windowSize) {\
+                   size_t signalSize = dirtySignal.size();\
+                   std::vector<double> cleanSignal(signalSize); // Выделяем память под результат один раз
+               
+                   // 1. Выделяем буфер под окно ВСЕГО ОДИН РАЗ до цикла.\
+                   // Размер окна: windowSize слева + 1 центр + windowSize справа\
+                   size_t windowLength = 2 * windowSize + 1;\
+                   std::vector<double> windowBuffer(windowLength);
+               
+                   // Итератор, указывающий на центральный элемент в буфере (медиану)\
+                   auto medianIterator = windowBuffer.begin() + windowSize;
+               
+                   // 2. Бежим по сигналу\
+                   for (size_t i = windowSize; i < signalSize - windowSize; ++i) {
+               
+                       // Вместо создания нового вектора, просто копируем данные в уже существующий буфер.\
+                       // Используем быстрый std::copy для копирования куска памяти.\
+                       std::copy(dirtySignal.begin() + (i - windowSize),\
+                                 dirtySignal.begin() + (i + windowSize + 1),\
+                                 windowBuffer.begin());
+               
+                       // Находим медиану. std::nth_element работает прямо внутри нашего постоянного буфера.\
+                       std::nth_element(windowBuffer.begin(), medianIterator, windowBuffer.end());
+               
+                       // Вычитаем найденную линию шума из грязного сигнала прямо на лету\
+                       cleanSignal[i] = dirtySignal[i] - *medianIterator;\
+                   }
+               
+                   return cleanSignal;\
+               }\
+               int main() {\
+                   // Тестовый сигнал\
+                   std::vector<double> dirtySignal = {0, 0, 500, 0, 0, 10, 12, 500, 15, 14, 0, 0};
+               
+                   // Запускаем быстрый фильтр\
+                   std::vector<double> cleanSignal = medianFilterFast(dirtySignal, 2);
+               
+                   std::cout << "Очищенный сигнал (быстрый алгоритм):\n";\
+                   for (size_t i = 2; i < cleanSignal.size() - 2; ++i) {\
+                       std::cout << cleanSignal[i] << "\n";\
+                   }
+               
+                   return 0;\
+               }
 
 ------------------------------
 ## За счет чего код стал быстрее?
