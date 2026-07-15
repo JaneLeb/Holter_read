@@ -290,8 +290,7 @@ CustomTkinter
 
 
 
-
-<img width="1024" height="1024" alt="c016e49800511f1a2165e6a90fa3bb5_1" src="https://github.com/user-attachments/assets/1ca99551-36c3-46f8-8ab8-1346a1d28c33" />
+<img width="1024" height="1024" alt="292f8ab800611f19104161ca0c37f38_1" src="https://github.com/user-attachments/assets/df1df672-344d-4f4d-ad27-78b46e0eda69" />
 
 
 .
