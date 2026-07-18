@@ -236,6 +236,51 @@ Python увидит обычный список чисел:
     return clean_df
 
 ------------------------------
+Вот как выглядит ИИ-анализ в Python-коде (инференс готовой нейросети) и как его показать в интерфейсе:
 
+      import streamlit as stimport numpy as npimport tensorflow as tf # или import torch для PyTorch
+      # 1. Загружаем предобученную нейросеть (например, ResNet, обученную на базе MIT-BIH)
+      @st.cache_resourcedef load_cardio_ai_model():
+          # В реальности здесь загружается ваш файл модели: tf.keras.models.load_model('model.h5')
+          # Для демо-режима создадим заглушку структуры модели
+          model = tf.keras.Sequential([
+              tf.keras.layers.Input(shape=(186, 1)), # Длина одного кардиокомплекса
+              tf.keras.layers.Conv1D(32, 5, activation='relu'),
+              tf.keras.layers.GlobalAveragePooling1D(),
+              tf.keras.layers.Dense(5, activation='softmax') # 5 классов аритмий
+          ])
+          return model
+      model = load_cardio_ai_model()
+      # 2. Функция ИИ-анализа (Инференс)def analyze_heartbeat_with_ai(heartbeat_signal):
+          # Подготавливаем данные под вход нейросети [batch_size, length, channels]
+          tensor_input = np.expand_dims(heartbeat_signal, axis=(0, -1))
+         
+          # Нейросеть делает предсказание (выдает вероятности для каждого класса)
+          predictions = model.predict(tensor_input, verbose=0)[0]
+         
+          classes = [
+              "Нормальный синусовый ритм",
+              "Желудочковая экстрасистола (⚠️ Опасно)",
+              "Наджелудочковая экстрасистола",
+              "Фронт фибрилляции",
+              "Артефакт/Шум"
+          ]
+         
+          best_class_idx = np.argmax(predictions)
+          return classes[best_class_idx], predictions[best_class_idx]
+      # --- ИНТЕРФЕЙС ДЛЯ ВРАЧА ---
+      st.title("🧠 Модуль нейросетевого анализа ЭКГ")
+      # Допустим,  C++ модуль уже нарезал ЭКГ на отдельные удары сердца# Имитируем один удар сердца (нормальный и аномальный)
+      st.subheader("Тестирование ИИ на выбранном комплексе")
+      # Врач выбирает на графике подозрительный участокmock_heartbeat = np.sin(np.linspace(0, np.pi, 186)) + np.random.normal(0, 0.02, 186)
+      if st.button("🔴 Запустить инференс нейросети"):
+          # Вызываем настоящий ИИ
+          result_class, confidence = analyze_heartbeat_with_ai(mock_heartbeat)
+         
+          # Красивый вывод результата работы ИИ для жюри
+          st.metric(label="Вердикт нейросети", value=result_class)
+          st.progress(float(confidence))
+          st.write(f"Уверенность модели: {confidence * 100:.2f}%")
+      
 
 
